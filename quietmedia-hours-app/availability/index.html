@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Availability — Quiet Media</title>
+<meta name="description" content="Days Quiet Media is available for filming and production work.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap">
+<style>
+/* Layout: one quiet page, calendar months in a column, warm neutrals, sharp edges */
+:root{--bg:#0A0A0A;--surface:#111111;--fg:#FFFFFF;--muted:#9A918A;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.18);--tan:#8A7F76;--sand:#DDD5C3;--font:'DM Sans','Helvetica Neue',Arial,sans-serif;color-scheme:dark}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#F5F4F2;--surface:#EEECEA;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.22);--tan:#7A6F66;--sand:#8A7F76;color-scheme:light}}
+:root[data-theme="light"]{--bg:#F5F4F2;--surface:#EEECEA;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.22);--tan:#7A6F66;--sand:#8A7F76;color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{font-family:var(--font);font-weight:300;color:var(--fg);font-size:15px;line-height:1.6;padding-inline:16px;-webkit-font-smoothing:antialiased}
+body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.035'/%3E%3C/svg%3E");background-size:200px}
+.wrap{max-width:760px;margin:0 auto;padding-block:32px 64px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+.brand svg{width:28px;height:28px}.brand b{font-weight:300;font-size:19px;letter-spacing:-.2px}
+h1{font-size:clamp(32px,5vw,48px);font-weight:300;letter-spacing:-.8px;line-height:1.05;margin-bottom:12px;text-wrap:balance}
+.lead{color:var(--muted);max-width:52ch;margin-bottom:28px}
+.key{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:28px}
+.key span{display:inline-flex;align-items:center;gap:7px}.key i{width:12px;height:12px;display:inline-block;border:1px solid var(--line-strong)}
+.key i.free{background:var(--fg)}.key i.limited{background:var(--tan)}.key i.busy{background:transparent}
+.month{margin-bottom:28px}
+.month h2{font-size:18px;font-weight:300;letter-spacing:-.1px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.wd{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--tan);text-align:center;padding-bottom:4px}
+.d{aspect-ratio:1;max-width:100%;display:grid;place-items:center;font-variant-numeric:tabular-nums;font-size:14px;border:1px solid var(--line);color:var(--muted)}
+.d.free{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:400}
+.d.limited{background:var(--tan);color:var(--bg);border-color:var(--tan)}
+.d.busy{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.d.off,.d.past{opacity:.3}.d.pad{border:0}
+.cta{border-top:1px solid var(--line);padding-top:24px;margin-top:8px}
+.cta p{color:var(--muted);margin-bottom:14px;max-width:52ch}
+.btn{display:inline-flex;align-items:center;padding:13px 24px;background:var(--fg);color:var(--bg);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.email{font-size:14px;margin-top:12px;color:var(--muted)}.email b{font-weight:400;color:var(--fg);user-select:all}
+.note{font-size:12px;color:var(--muted);margin-top:28px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><svg viewBox="0 0 400 400" aria-hidden="true"><path d="M 296.555 343.549 A 173 173 0 1 1 343.549 296.555 L 302.822 255.828 A 117 117 0 1 0 255.828 302.822 L 296.555 343.549 Z" fill="currentColor"/></svg><b>quiet media</b></div>
+  <h1>When we're free</h1>
+  <p class="lead">Days we can take on filming or production work over the coming weeks. If a date you need isn't shown as free, ask anyway. Schedules move.</p>
+  <div class="key"><span><i class="free"></i> Available</span><span><i class="limited"></i> Part of the team available</span><span><i class="busy"></i> Booked</span></div>
+  <div id="months"><p class="note">Loading…</p></div>
+  <div class="cta"><p>Tell us the dates, where, and what you have in mind, and we'll come back to you within a working day.</p><a class="btn" id="mail" href="#">Enquire</a><p class="email" id="emailline" hidden>Or email <b id="email"></b></p></div>
+  <p class="note" id="updated"></p>
+</div>
+<script>
+(async function(){
+  const el=document.getElementById('months');
+  let data;try{const r=await fetch('../availability.json?'+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;data=await r.json()}catch(e){el.innerHTML='<p class="note">Availability isn\'t published yet. Email us and we\'ll let you know.</p>';return}
+  const days=data.days||{};const keys=Object.keys(days).sort();if(!keys.length){el.innerHTML='<p class="note">No dates published yet.</p>';return}
+  const pad=n=>String(n).padStart(2,'0');const today=new Date();today.setHours(0,0,0,0);
+  const first=new Date(keys[0]+'T00:00:00'),last=new Date(keys[keys.length-1]+'T00:00:00');
+  let h='';for(let m=new Date(first.getFullYear(),first.getMonth(),1);m<=last;m=new Date(m.getFullYear(),m.getMonth()+1,1)){
+    h+='<section class="month"><h2>'+m.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</h2><div class="grid">'+['M','T','W','T','F','S','S'].map(w=>'<div class="wd">'+w+'</div>').join('');
+    const lead=(m.getDay()+6)%7;for(let i=0;i<lead;i++)h+='<div class="d pad"></div>';
+    const n=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+    for(let d=1;d<=n;d++){const dt=new Date(m.getFullYear(),m.getMonth(),d);const k=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(d);const st=days[k];
+      const cls=dt<today?'past':st||'pad';const lab=st==='free'?'Available':st==='limited'?'Part of the team available':st==='busy'?'Booked':'';
+      h+='<div class="d '+cls+'" '+(lab?'title="'+lab+'" aria-label="'+k+' '+lab+'"':'')+'>'+(st||dt<today?d:'')+'</div>'}
+    h+='</div></section>'}
+  el.innerHTML=h;
+  if(data.email){const a=document.getElementById('mail');a.href='mailto:'+data.email+'?subject='+encodeURIComponent('Availability enquiry');document.getElementById('email').textContent=data.email;document.getElementById('emailline').hidden=false}
+  if(data.updated)document.getElementById('updated').textContent='Updated '+new Date(data.updated).toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'. Shows planned availability only; nothing here is a confirmed booking.';
+})();
+</script>
+</body>
+</html>
