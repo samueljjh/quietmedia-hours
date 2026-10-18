@@ -349,6 +349,7 @@ const fmtTime=ms=>{const d=new Date(ms);return pad(d.getHours())+':'+pad(d.getMi
 const fmtDate=(ms,o)=>new Date(ms).toLocaleDateString('en-GB',o||{day:'numeric',month:'short'});
 const elapsed=ms=>{const s=Math.max(0,Math.floor(ms/1000));return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60)};
 const startOfDay=d=>{d=new Date(d);d.setHours(0,0,0,0);return d.getTime()};
+const addDays=(ms,n)=>{const d=new Date(ms);return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n).getTime()};
 const startOfWeek=(ms)=>{const d=new Date(startOfDay(ms));const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return d.getTime()};
 const startOfMonth=ms=>{const d=new Date(ms);return new Date(d.getFullYear(),d.getMonth(),1).getTime()};
 const name=p=>(S.settings.names&&S.settings.names[p])||PEOPLE.find(x=>x.id===p)?.def||p;
@@ -447,7 +448,7 @@ async function pull(col,force){
 let availTimer=null;
 function availabilityData(){
   const weeks=+S.settings.availWeeks||12;const t0=startOfDay(Date.now());const days={};
-  for(let i=0;i<weeks*7;i++){const d=t0+i*DAYMS;const dd=new Date(d);const we=dd.getDay()===0||dd.getDay()===6;
+  for(let i=0;i<weeks*7;i++){const d=addDays(t0,i);const dd=new Date(d);const we=dd.getDay()===0||dd.getDay()===6;
     if(we&&!S.settings.availWeekends){days[dayKey(d)]='off';continue}
     const busyPeople=PEOPLE.filter(p=>busyOn(d,p.id).length).length;
     days[dayKey(d)]=busyPeople>=PEOPLE.length?'busy':busyPeople?'limited':'free'}
@@ -542,7 +543,7 @@ async function importBackup(file){
 }
 
 /* ---------- valuation ---------- */
-function rateCard(c){return {billing:c.billing||'card',shortRate:+c.shortRate||0,halfDay:+c.halfDay||0,fullDay:+c.fullDay||0,editDay:+c.editDay||0,editHours:+c.editHours||8,hourlyRate:+c.hourlyRate||0,monthlyFee:+c.monthlyFee||0,retainerDays:+c.retainerDays||0,retainerDayHours:+c.retainerDayHours||8,retainerStart:c.retainerStart||''}}
+function rateCard(c){return {billing:c.billing||'card',shortRate:+c.shortRate||0,halfDay:+c.halfDay||0,fullDay:+c.fullDay||0,editDay:+c.editDay||0,editHours:+c.editHours||8,hourlyRate:+c.hourlyRate||0,monthlyFee:+c.monthlyFee||0,retainerDays:+c.retainerDays||0,retainerDayHours:+c.retainerDayHours||8,retainerStart:c.retainerStart||'',retainerPeriod:c.retainerPeriod||'month'}}
 function filmBand(h,r){if(h<=0)return null;if(h<=2)return['up to 2 hrs',r.shortRate];if(h<=4)return['half day',r.halfDay];return['full day',r.fullDay]}
 /* The fee lives on the booking. The rate card only SUGGESTS a fee when a booking is created; once saved, the fee is fixed. */
 function suggestFee(ev){
@@ -558,30 +559,46 @@ const linesTotal=ls=>ls.reduce((s,l)=>s+l.qty*l.unit,0);
 /* Bookings that have happened, carry a fee, and are not yet on an invoice */
 function billableBookings(cid){const now=Date.now();return Object.values(S.events).filter(e=>e.clientId===cid&&!e.invoiceId&&e.status!=='cancelled'&&e.status!=='pencil'&&e.start<=now&&eventValue(e)>0).sort((a,b)=>a.start-b.start)}
 function bookingLine(e){return {desc:e.title+' ('+fmtDate(e.start,{day:'numeric',month:'short'})+(e.type?', '+e.type.toLowerCase():'')+')',qty:1,unit:eventValue(e),eventId:e.id}}
-/* Retainer months: 'YYYY-MM' keys from the retainer start month to the current month */
+/* Retainer periods: monthly, quarterly, termly (school terms) or yearly. Each period has a key, label, start and end. */
+const PERIODS_PER_YEAR={month:12,quarter:4,term:3,year:1};
 const monthKey=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const monthLabel=k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'})};
 const monthRange=k=>{const [y,m]=k.split('-').map(Number);return [new Date(y,m-1,1).getTime(),new Date(y,m,1).getTime()]};
-function retainerMonths(c,upto){
+function periodOf(kind,ms){
+  const d=new Date(ms);const y=d.getFullYear(),m=d.getMonth();
+  if(kind==='month')return {key:y+'-'+pad(m+1),label:monthLabel(y+'-'+pad(m+1)),start:new Date(y,m,1).getTime(),end:new Date(y,m+1,1).getTime()};
+  if(kind==='quarter'){const q=Math.floor(m/3);return {key:y+'-Q'+(q+1),label:'Q'+(q+1)+' '+y,start:new Date(y,q*3,1).getTime(),end:new Date(y,q*3+3,1).getTime()}}
+  if(kind==='year')return {key:String(y),label:String(y),start:new Date(y,0,1).getTime(),end:new Date(y+1,0,1).getTime()};
+  // term: Autumn Sep–Dec, Spring Jan–Apr, Summer May–Aug
+  if(m>=8)return {key:y+'-T1',label:'Autumn term '+y,start:new Date(y,8,1).getTime(),end:new Date(y+1,0,1).getTime()};
+  if(m<=3)return {key:y+'-T2',label:'Spring term '+y,start:new Date(y,0,1).getTime(),end:new Date(y,4,1).getTime()};
+  return {key:y+'-T3',label:'Summer term '+y,start:new Date(y,4,1).getTime(),end:new Date(y,8,1).getTime()};
+}
+function retainerPeriods(c,upto){
   const r=rateCard(c);if(r.billing!=='retainer')return [];
-  let start=r.retainerStart||monthKey(c.created||Date.now());const end=monthKey(upto||Date.now());const out=[];
-  let [y,m]=start.split('-').map(Number);let guard=0;
-  while(guard++<240){const k=y+'-'+pad(m);if(k>end)break;out.push(k);m++;if(m>12){m=1;y++}}
+  const kind=r.retainerPeriod||'month';
+  const startMs=r.retainerStart?monthRange(r.retainerStart)[0]:(c.created||Date.now());
+  let p=periodOf(kind,startMs);const endMs=upto||Date.now();const out=[];let guard=0;
+  while(p.start<=endMs&&guard++<200){out.push(p);p=periodOf(kind,p.end)}
   return out;
 }
+const retainerMonths=(c,upto)=>retainerPeriods(c,upto).map(p=>p.key);
+const periodByKey=(c,k)=>retainerPeriods(c,Date.now()+366*DAYMS).find(p=>p.key===k)||periodOf(rateCard(c).retainerPeriod||'month',Date.now());
 function retainerDelivery(c,k){
-  const r=rateCard(c);const [a,b]=monthRange(k);
+  const r=rateCard(c);const pr=periodByKey(c,k);const a=pr.start,b=pr.end;
   const es=Object.values(S.entries).filter(e=>e.clientId===c.id&&e.start>=a&&e.start<b);
   const hours=es.reduce((s,e)=>s+entryH(e),0);const promised=r.retainerDays*r.retainerDayHours;
   const byPerson={},byCat={};es.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e);byCat[e.category]=(byCat[e.category]||0)+entryH(e)});
-  return {key:k,hours,promised,days:r.retainerDayHours?hours/r.retainerDayHours:0,pct:promised?hours/promised*100:0,byPerson,byCat,fee:r.monthlyFee};
+  return {key:k,label:pr.label,start:a,end:b,hours,promised,days:r.retainerDayHours?hours/r.retainerDayHours:0,pct:promised?hours/promised*100:0,byPerson,byCat,fee:r.monthlyFee};
 }
+function annualValue(c){const r=rateCard(c);return r.billing==='retainer'?r.monthlyFee*(PERIODS_PER_YEAR[r.retainerPeriod||'month']||12):0}
+function bookedAhead(cid){const now=Date.now();const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>now&&e.status!=='cancelled');return {count:evs.length,total:evs.reduce((s,e)=>s+eventValue(e),0),pencil:evs.filter(e=>evStatus(e)==='pencil').reduce((s,e)=>s+eventValue(e),0)}}
 function unbilled(cid){
   const c=client(cid);const li=lastInvoice(cid);const since=li?li.date:0;
   const bookings=billableBookings(cid);
   const lines=bookings.map(bookingLine);
   const r=rateCard(c);const retMonths=r.billing==='retainer'&&r.monthlyFee?retainerMonths(c).filter(k=>!(c.retainerInvoiced||{})[k]):[];
-  retMonths.forEach(k=>lines.push({desc:'Retainer, '+monthLabel(k),qty:1,unit:r.monthlyFee,month:k}));
+  retMonths.forEach(k=>lines.push({desc:'Retainer, '+periodByKey(c,k).label,qty:1,unit:r.monthlyFee,month:k}));
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=since);
   const done=es.filter(e=>e.end);
   const hours=done.reduce((s,e)=>s+entryH(e),0);
@@ -593,7 +610,7 @@ function unbilled(cid){
 function clientValue(cid,from,to){
   const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=from&&e.start<to);
   let fees=evs.reduce((s,e)=>s+eventValue(e),0);
-  const c=client(cid);if(c&&rateCard(c).billing==='retainer'){fees+=retainerMonths(c,to-1).filter(k=>monthRange(k)[0]>=startOfMonth(from)).length*rateCard(c).monthlyFee}
+  const c=client(cid);if(c&&rateCard(c).billing==='retainer'){fees+=retainerPeriods(c,to-1).filter(p=>p.end>from).length*rateCard(c).monthlyFee}
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=from&&e.start<to);
   const hours=es.reduce((s,e)=>s+entryH(e),0);
   const byPerson={};es.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e)});
@@ -620,7 +637,7 @@ async function createInvoice(cid){
   if(!u.lines.length)return;
   const num=(S.settings.prefix||'')+(S.settings.nextInvoice||1001);
   const sub=u.total;const vat=c.vat===false?0:sub*(+S.settings.vatRate||0)/100;
-  const starts=u.bookings.map(e=>e.start).concat(u.retMonths.map(k=>monthRange(k)[0]));const ends=u.bookings.map(e=>e.end).concat(u.retMonths.map(k=>monthRange(k)[1]-1));const from=Math.min(...starts);const to=Math.max(...ends);
+  const starts=u.bookings.map(e=>e.start).concat(u.retMonths.map(k=>periodByKey(c,k).start));const ends=u.bookings.map(e=>e.end).concat(u.retMonths.map(k=>periodByKey(c,k).end-1));const from=Math.min(...starts);const to=Math.max(...ends);
   const id=await put('invoices',null,{clientId:cid,number:num,date:Date.now(),from,to,lines:u.lines,subtotal:sub,vat,total:sub+vat,hours:u.hours,status:'draft',eventIds:u.bookings.map(e=>e.id),retMonths:u.retMonths});
   await saveSettings({nextInvoice:(+S.settings.nextInvoice||1001)+1});
   for(const e of u.bookings){await patch('events',e.id,{invoiceId:id})}
@@ -746,16 +763,16 @@ const DAYMS=864e5;
 function addMonths(ms,n){const d=new Date(ms);d.setDate(1);d.setMonth(d.getMonth()+n);return d.getTime()}
 function clashes(ev,all){return all.some(o=>o.id!==ev.id&&o.start<ev.end&&o.end>ev.start&&(o.people||[]).some(p=>(ev.people||[]).includes(p)))}
 function retainerPanel(c){
-  const r=rateCard(c);const months=retainerMonths(c).slice(-6).reverse();if(!months.length)return '';
+  const r=rateCard(c);const months=retainerMonths(c).slice(-6).reverse();if(!months.length)return '';const per=r.retainerPeriod||'month';const perWord={month:'month',quarter:'quarter',term:'term',year:'year'}[per];
   const cur=retainerDelivery(c,months[0]);const maxP=Math.max(1,...Object.values(cur.byPerson));
   const bar=(d)=>{const over=d.hours>d.promised&&d.promised;const w=d.promised?Math.min(100,d.hours/d.promised*100):0;return '<div class="rbar"><i style="width:'+w+'%;background:'+(over?'var(--warn)':c.colour)+'"></i></div>'};
-  const status=!cur.promised?'Set promised days in the client\'s rates to track delivery.':cur.pct<60?'Under-delivering so far this month. Room to add value.':cur.pct<=110?'On track.':'Over-delivering. Worth a conversation if it keeps happening.';
-  return '<section class="panel"><div class="panel-head"><h3>Retainer, '+monthLabel(cur.key)+'</h3><span class="eyebrow num">'+gbp(r.monthlyFee)+' / month</span></div>'+
+  const status=!cur.promised?'Set promised days in the client\'s rates to track delivery.':cur.pct<60?'Under-delivering so far this '+perWord+'. Room to add value.':cur.pct<=110?'On track.':'Over-delivering. Worth a conversation if it keeps happening.';
+  return '<section class="panel"><div class="panel-head"><h3>Retainer, '+cur.label+'</h3><span class="eyebrow num">'+gbp(r.monthlyFee)+' / '+perWord+' · '+gbp(annualValue(c))+' a year</span></div>'+
   '<div class="grid g3" style="margin-bottom:14px"><div class="stat"><span class="eyebrow">Promised</span><span class="v">'+r.retainerDays+'<span class="muted" style="font-size:16px"> days</span></span><span class="s">'+hrs(cur.promised)+' at '+r.retainerDayHours+'h a day</span></div><div class="stat"><span class="eyebrow">Delivered</span><span class="v">'+hdec(cur.days).replace(/\.00$/,'')+'<span class="muted" style="font-size:16px"> days</span></span><span class="s">'+hrs(cur.hours)+' clocked</span></div><div class="stat"><span class="eyebrow">Effective rate</span><span class="v">'+(cur.hours?gbp(r.monthlyFee/cur.hours):'—')+'<span class="muted" style="font-size:16px">/hr</span></span><span class="s">'+(cur.promised?Math.round(cur.pct)+'% of promised':'')+'</span></div></div>'+
   bar(cur)+'<p class="note" style="margin:8px 0 14px">'+status+'</p>'+
   '<div class="bars">'+PEOPLE.map(p=>{const h=cur.byPerson[p.id]||0;return '<div class="bar"><span class="lab">'+esc(name(p.id))+'</span><span class="track"><i style="width:'+(h/maxP*100)+'%;background:'+c.colour+'"></i></span><span class="val">'+hrs(h)+'</span></div>'}).join('')+'</div>'+
   (Object.keys(cur.byCat).length?'<dl class="kv" style="margin-top:12px">'+Object.entries(cur.byCat).sort((a,b)=>b[1]-a[1]).map(([k,h])=>'<dt>'+esc(k)+'</dt><dd>'+hrs(h)+'</dd>').join('')+'</dl>':'')+
-  (months.length>1?'<hr class="s" style="margin:16px 0"><div class="tbl"><table><thead><tr><th>Month</th><th class="r">Promised</th><th class="r">Delivered</th><th class="r">%</th><th class="r">£/hr</th></tr></thead><tbody>'+months.slice(1).map(k=>{const d=retainerDelivery(c,k);return '<tr><td>'+monthLabel(k)+'</td><td class="r">'+hrs(d.promised)+'</td><td class="r">'+hrs(d.hours)+'</td><td class="r"'+(d.promised&&d.pct>110?' style="color:var(--warn)"':'')+'>'+(d.promised?Math.round(d.pct)+'%':'—')+'</td><td class="r">'+(d.hours?gbp(d.fee/d.hours):'—')+'</td></tr>'}).join('')+'</tbody></table></div>':'')+
+  (months.length>1?'<hr class="s" style="margin:16px 0"><div class="tbl"><table><thead><tr><th>Period</th><th class="r">Promised</th><th class="r">Delivered</th><th class="r">%</th><th class="r">£/hr</th></tr></thead><tbody>'+months.slice(1).map(k=>{const d=retainerDelivery(c,k);return '<tr><td>'+d.label+'</td><td class="r">'+hrs(d.promised)+'</td><td class="r">'+hrs(d.hours)+'</td><td class="r"'+(d.promised&&d.pct>110?' style="color:var(--warn)"':'')+'>'+(d.promised?Math.round(d.pct)+'%':'—')+'</td><td class="r">'+(d.hours?gbp(d.fee/d.hours):'—')+'</td></tr>'}).join('')+'</tbody></table></div>':'')+
   '</section>';
 }
 function vClient(cid){
@@ -765,21 +782,23 @@ function vClient(cid){
   const byCat={};u.done.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+entryH(e)});
   const maxP=Math.max(1,...Object.values(u.byPerson));
   const people=PEOPLE.map(p=>{const h=u.byPerson[p.id]||0;return '<div class="bar"><span class="lab">'+esc(name(p.id))+'</span><span class="track"><i style="width:'+(h/maxP*100)+'%;background:'+c.colour+'"></i></span><span class="val">'+hrs(h)+'</span></div>'}).join('');
-  const lines=u.lines.length?'<div class="tbl"><table><thead><tr><th>Line</th><th class="r">Fee</th></tr></thead><tbody>'+u.bookings.map(e=>'<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left" data-act="editevent" data-v="'+e.id+'">'+esc(e.title)+'</button><div class="note">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+esc(e.type)+' · '+esc((e.people||[]).map(name).join(' & '))+'</div></td><td class="r">'+gbp2(eventValue(e))+'</td></tr>').join('')+u.retMonths.map(k=>'<tr><td>Retainer, '+monthLabel(k)+'<div class="note">Monthly fee</div></td><td class="r">'+gbp2(r.monthlyFee)+'</td></tr>').join('')+'</tbody><tfoot><tr><td>Subtotal, ex VAT</td><td class="r">'+gbp2(u.total)+'</td></tr></tfoot></table></div>':'<div class="empty">Nothing waiting to be invoiced.'+(r.billing==='retainer'?' The next retainer month appears here on the 1st.':' Future bookings appear here once their date has passed.')+'</div>';
+  const lines=u.lines.length?'<div class="tbl"><table><thead><tr><th>Line</th><th class="r">Fee</th></tr></thead><tbody>'+u.bookings.map(e=>'<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left" data-act="editevent" data-v="'+e.id+'">'+esc(e.title)+'</button><div class="note">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+esc(e.type)+' · '+esc((e.people||[]).map(name).join(' & '))+'</div></td><td class="r">'+gbp2(eventValue(e))+'</td></tr>').join('')+u.retMonths.map(k=>'<tr><td>Retainer, '+periodByKey(c,k).label+'<div class="note">Retainer fee</div></td><td class="r">'+gbp2(r.monthlyFee)+'</td></tr>').join('')+'</tbody><tfoot><tr><td>Subtotal, ex VAT</td><td class="r">'+gbp2(u.total)+'</td></tr></tfoot></table></div>':'<div class="empty">Nothing waiting to be invoiced.'+(r.billing==='retainer'?' The next retainer period appears here when it starts.':' Future bookings appear here once their date has passed.')+'</div>';
   const y0=new Date(new Date().getFullYear(),0,1).getTime();const cv=clientValue(cid,y0,Date.now()+1);
   const ents=u.entries.sort((a,b)=>b.start-a.start);
   const upcoming=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>Date.now()&&e.status!=='cancelled').sort((a,b)=>a.start-b.start);
   return '<button class="link back" data-act="closeclient">← All clients</button>'+
   '<div class="panel-head"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="dot" style="width:16px;height:16px;background:'+c.colour+'"></span><h1>'+esc(c.name)+'</h1></div><div class="row" style="flex:0 1 auto"><button class="btn ghost small" data-act="editclient" data-v="'+cid+'">Edit client &amp; rates</button><button class="btn ghost small" data-act="newevent" data-c="'+cid+'">Book work</button><button class="btn small" data-act="invoice" data-v="'+cid+'" '+(u.lines.length?'':'disabled')+'>Create invoice</button></div></div>'+
-  '<div class="grid g3" style="margin-bottom:16px"><div class="panel stat"><span class="eyebrow">To invoice</span><span class="v">'+gbp2(u.total)+'</span><span class="s">'+u.lines.length+' line'+(u.lines.length===1?'':'s')+(c.vat===false?' · no VAT':' · + '+gbp2(u.total*(+S.settings.vatRate||0)/100)+' VAT')+'</span></div>'+
-  '<div class="panel stat"><span class="eyebrow">Time since '+(li?esc(li.number)+', '+fmtDate(li.date):'the start')+'</span><span class="v">'+hrs(u.hours)+'</span><span class="s">'+hrs(u.hours-u.billH)+' of it on admin, meetings and travel</span></div>'+
-  '<div class="panel stat"><span class="eyebrow">Value this year</span><span class="v">'+(cv.hours?gbp(cv.rate):'—')+'<span class="muted" style="font-size:16px">/hr</span></span><span class="s">'+gbp(cv.fees)+' in fees across '+hrs(cv.hours)+' worked'+(()=>{const cc=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=y0).reduce((t,e)=>t+crewCost(e),0);return cc?' · '+gbp(cc)+' crew · '+gbp(cv.fees-cc)+' net':''})()+'</span></div></div>'+
+  (()=>{const ba=bookedAhead(cid);const av=annualValue(c);const cc=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=y0).reduce((t,e)=>t+crewCost(e),0);
+  return '<div class="grid g3" style="margin-bottom:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))"><div class="panel stat"><span class="eyebrow">To invoice</span><span class="v">'+gbp(u.total)+'</span><span class="s">'+u.lines.length+' line'+(u.lines.length===1?'':'s')+(c.vat===false?' · no VAT':' · + '+gbp(u.total*(+S.settings.vatRate||0)/100)+' VAT')+'</span></div>'+
+  '<div class="panel stat"><span class="eyebrow">Booked ahead</span><span class="v">'+gbp(ba.total)+'</span><span class="s">'+ba.count+' booking'+(ba.count===1?'':'s')+(ba.pencil?' · '+gbp(ba.pencil)+' pencilled':'')+'</span></div>'+
+  '<div class="panel stat"><span class="eyebrow">'+(av?'Annual value':'Value this year')+'</span><span class="v">'+gbp(av?av+ba.total:cv.fees)+'</span><span class="s">'+(av?gbp(r.monthlyFee)+' per '+(r.retainerPeriod||'month')+(ba.total?' + '+gbp(ba.total)+' booked extras':''):gbp(cv.fees)+' in fees'+(cc?', '+gbp(cc)+' crew, '+gbp(cv.fees-cc)+' net':''))+'</span></div>'+
+  '<div class="panel stat"><span class="eyebrow">Time since '+(li?esc(li.number)+', '+fmtDate(li.date):'the start')+'</span><span class="v">'+hrs(u.hours)+'</span><span class="s">'+(cv.hours?gbp(cv.rate)+'/hr this year · ':'')+hrs(u.hours-u.billH)+' admin, meetings, travel</span></div></div>'})()+
   '<div class="split"><div class="grid" style="align-content:start">'+(r.billing==='retainer'?retainerPanel(c):'')+'<section class="panel"><div class="panel-head"><h3>Ready to invoice</h3><span class="note">Fees are fixed when the work is booked.</span></div>'+lines+'</section>'+
   (upcoming.length?'<section class="panel"><div class="panel-head"><h3>Booked, not yet done</h3><span class="note num">'+gbp(upcoming.reduce((s,e)=>s+eventValue(e),0))+' coming</span></div><div class="list">'+upcoming.slice(0,6).map(e=>'<div class="item" style="cursor:pointer" data-act="gotoday" data-v="'+startOfDay(e.start)+'"><span class="sw" style="background:'+c.colour+'"></span><div class="main"><div class="t">'+esc(e.title)+'</div><div class="meta">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+fmtTime(e.start)+'–'+fmtTime(e.end)+' · '+esc(e.type)+'</div></div><div class="end"><span class="num">'+gbp(eventValue(e))+'</span></div></div>').join('')+'</div></section>':'')+
   '<section class="panel"><div class="panel-head"><h3>Time logged'+(li?' since '+esc(li.number):'')+'</h3><button class="link" data-act="manual" data-v="'+cid+'">Add time</button></div><div class="list">'+(ents.length?ents.slice(0,30).map(entryRow).join(''):'<div class="empty">No time logged yet.</div>')+'</div></section></div>'+
   '<div class="grid" style="align-content:start"><section class="panel"><h3 style="margin-bottom:14px">Who did the work</h3><div class="bars">'+people+'</div>'+
   (Object.keys(byCat).length?'<hr class="s" style="margin:16px 0"><dl class="kv">'+Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,h])=>'<dt>'+esc(k)+'</dt><dd>'+hrs(h)+'</dd>').join('')+'</dl>':'')+'</section>'+
-  '<section class="panel"><h3 style="margin-bottom:12px">Suggested fees</h3><p class="note" style="margin:0 0 10px">Used to pre-fill a fee when you book. Change the fee on any booking.</p><dl class="kv">'+(r.billing==='retainer'?'<dt>Monthly retainer</dt><dd>'+gbp2(r.monthlyFee)+'</dd><dt>Promised</dt><dd>'+r.retainerDays+' days × '+r.retainerDayHours+'h</dd><dt>Since</dt><dd>'+(r.retainerStart?monthLabel(r.retainerStart):'client added')+'</dd>':r.billing==='hourly'?'<dt>Hourly</dt><dd>'+gbp2(r.hourlyRate)+'</dd>':'<dt>Filming up to 2 hrs</dt><dd>'+gbp(r.shortRate)+'</dd><dt>Half day, 3–4 hrs</dt><dd>'+gbp(r.halfDay)+'</dd><dt>Full day, 4+ hrs</dt><dd>'+gbp(r.fullDay)+'</dd><dt>Edit day</dt><dd>'+gbp(r.editDay)+'</dd>')+'</dl>'+(c.notes?'<p class="note" style="margin-top:12px">'+esc(c.notes)+'</p>':'')+'</section>'+
+  '<section class="panel"><h3 style="margin-bottom:12px">Suggested fees</h3><p class="note" style="margin:0 0 10px">Used to pre-fill a fee when you book. Change the fee on any booking.</p><dl class="kv">'+(r.billing==='retainer'?'<dt>Monthly retainer</dt><dd>'+gbp2(r.monthlyFee)+'</dd><dt>Promised</dt><dd>'+r.retainerDays+' days × '+r.retainerDayHours+'h per '+(r.retainerPeriod||'month')+'</dd><dt>Since</dt><dd>'+(r.retainerStart?monthLabel(r.retainerStart):'client added')+'</dd>':r.billing==='hourly'?'<dt>Hourly</dt><dd>'+gbp2(r.hourlyRate)+'</dd>':'<dt>Filming up to 2 hrs</dt><dd>'+gbp(r.shortRate)+'</dd><dt>Half day, 3–4 hrs</dt><dd>'+gbp(r.halfDay)+'</dd><dt>Full day, 4+ hrs</dt><dd>'+gbp(r.fullDay)+'</dd><dt>Edit day</dt><dd>'+gbp(r.editDay)+'</dd>')+'</dl>'+(c.notes?'<p class="note" style="margin-top:12px">'+esc(c.notes)+'</p>':'')+'</section>'+
   '<section class="panel"><div class="panel-head"><h3>Invoices</h3>'+(invs.length?'<button class="link" data-act="xero" data-v="'+cid+'">Export for Xero</button>':'')+'</div><div class="list">'+(invs.length?invs.map(invRow).join(''):'<div class="empty">No invoices yet.</div>')+'</div></section></div></div>';
 }
 function invRow(i){return '<div class="item"><span class="sw" style="background:'+colour(i.clientId)+'"></span><div class="main"><div class="t">'+esc(i.number)+' <span class="muted">· '+esc(cname(i.clientId))+'</span></div><div class="meta">'+fmtDate(i.date,{day:'numeric',month:'short',year:'numeric'})+' · '+(i.lines||[]).length+' booking'+((i.lines||[]).length===1?'':'s')+'</div></div><div class="end"><span class="num">'+gbp2(i.total)+'</span><button class="pill '+i.status+'" data-act="openinvoice" data-v="'+i.id+'" style="background:none;cursor:pointer">'+i.status+'</button></div></div>'}
@@ -889,7 +908,7 @@ function openClientModal(cid){
     '<label class="f">Suggested fees<select id="m-billing" data-act="billing"><option value="card" '+(c.billing==='card'?'selected':'')+'>Rate card: filming bands and edit days</option><option value="hourly" '+(c.billing==='hourly'?'selected':'')+'>Hourly</option><option value="retainer" '+(c.billing==='retainer'?'selected':'')+'>Monthly retainer</option></select></label>'+
     (c.billing==='card'?'<div class="row"><label class="f">Up to 2 hrs (£)<input type="number" id="m-short" value="'+c.shortRate+'"></label><label class="f">Half day (£)<input type="number" id="m-half" value="'+c.halfDay+'"></label><label class="f">Full day (£)<input type="number" id="m-full" value="'+c.fullDay+'"></label></div><div class="row"><label class="f">Edit day (£)<input type="number" id="m-edit" value="'+c.editDay+'"></label><label class="f">Hours in an edit day<input type="number" id="m-edith" value="'+c.editHours+'"></label></div><p class="note">These only suggest a fee when you book a shoot or edit. The fee on each booking is what gets invoiced.</p>':'')+
     (c.billing==='hourly'?'<label class="f">Hourly rate (£)<input type="number" id="m-hourly" value="'+c.hourlyRate+'"></label>':'')+
-    (c.billing==='retainer'?'<div class="row"><label class="f">Monthly fee (£)<input type="number" id="m-fee" value="'+c.monthlyFee+'"></label><label class="f">Promised days a month<input type="number" id="m-rdays" min="0" step="0.5" value="'+(c.retainerDays||'')+'"></label><label class="f">Hours in a day<input type="number" id="m-rhours" min="1" value="'+(c.retainerDayHours||8)+'"></label></div><label class="f">Retainer started (month)<input type="month" id="m-rstart" value="'+esc(c.retainerStart||'')+'"></label><p class="note">The fee becomes an invoice line automatically each month. Clocked hours are compared with the promised days so you can see whether you are under- or over-delivering. Bookings for this client carry no fee unless you type one.</p>':'')+
+    (c.billing==='retainer'?'<div class="row"><label class="f">Billed every<select id="m-rper"><option value="month" '+((c.retainerPeriod||'month')==='month'?'selected':'')+'>Month</option><option value="quarter" '+(c.retainerPeriod==='quarter'?'selected':'')+'>Quarter</option><option value="term" '+(c.retainerPeriod==='term'?'selected':'')+'>School term</option><option value="year" '+(c.retainerPeriod==='year'?'selected':'')+'>Year</option></select></label><label class="f">Fee per period (£)<input type="number" id="m-fee" value="'+c.monthlyFee+'"></label><label class="f">Promised days per period<input type="number" id="m-rdays" min="0" step="0.5" value="'+(c.retainerDays||'')+'"></label><label class="f">Hours in a day<input type="number" id="m-rhours" min="1" value="'+(c.retainerDayHours||8)+'"></label></div><label class="f">Retainer started (month)<input type="month" id="m-rstart" value="'+esc(c.retainerStart||'')+'"></label><p class="note">Terms run Sep–Dec, Jan–Apr, May–Aug. The fee becomes an invoice line automatically at the start of each period. Clocked hours are compared with the promised days so you can see whether you are under- or over-delivering. Bookings for this client carry no fee unless you type one.</p>':'')+
     '<div class="row"><label class="f">Accounts email<input type="email" id="m-email" value="'+esc(c.email||'')+'"></label><label class="f">Charge VAT<select id="m-vat"><option value="1" '+(c.vat!==false?'selected':'')+'>Yes</option><option value="0" '+(c.vat===false?'selected':'')+'>No</option></select></label></div>'+
     '<label class="f">Notes<textarea id="m-notes" rows="2">'+esc(c.notes||'')+'</textarea></label>'+
     '<div class="acts">'+(cid?'<button class="btn ghost small" data-act="archive" data-v="'+cid+'">'+(c.archived?'Restore':'Archive')+'</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveclient" data-v="'+(cid||'')+'">Save client</button></div>'}};
@@ -899,7 +918,7 @@ function readClientForm(){const c=S.modal.c;const v=id=>{const el=document.getEl
   c.name=v('m-name')??c.name;c.billing=v('m-billing')??c.billing;
   [['m-short','shortRate'],['m-half','halfDay'],['m-full','fullDay'],['m-edit','editDay'],['m-edith','editHours'],['m-hourly','hourlyRate'],['m-fee','monthlyFee']].forEach(([i,k])=>{const x=v(i);if(x!==undefined)c[k]=+x||0});
   c.email=v('m-email')??c.email;c.notes=v('m-notes')??c.notes;const vt=v('m-vat');if(vt!==undefined)c.vat=vt==='1';
-  [['m-rdays','retainerDays'],['m-rhours','retainerDayHours']].forEach(([i,k])=>{const x=v(i);if(x!==undefined)c[k]=+x||0});const rs=v('m-rstart');if(rs!==undefined)c.retainerStart=rs;
+  [['m-rdays','retainerDays'],['m-rhours','retainerDayHours']].forEach(([i,k])=>{const x=v(i);if(x!==undefined)c[k]=+x||0});const rs=v('m-rstart');if(rs!==undefined)c.retainerStart=rs;const rp=v('m-rper');if(rp!==undefined)c.retainerPeriod=rp;
 }
 
 function openEntryModal(eid,presetClient){
@@ -945,8 +964,8 @@ function vSchedule(){
   if(C.mode==='month'){
     const m0=startOfMonth(C.cursor);const d=new Date(m0);const g0=startOfWeek(m0);
     title=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    const cells=[];for(let i=0;i<42;i++)cells.push(g0+i*DAYMS);
-    const last=cells[41]+DAYMS;from=g0;to=last;
+    const cells=[];for(let i=0;i<42;i++)cells.push(addDays(g0,i));
+    const last=addDays(g0,42);from=g0;to=last;
     const need=cells.slice(35).some(x=>new Date(x).getMonth()===d.getMonth())?42:35;
     const evs=all.filter(e=>e.start<last&&e.end>=g0);
     const sel=C.sel||((t0>=m0&&t0<addMonths(m0,1))?t0:m0);
@@ -958,11 +977,11 @@ function vSchedule(){
     const se=all.filter(e=>startOfDay(e.start)===sel).sort((a,b)=>a.start-b.start);
     body+='<section class="panel agenda"><div class="panel-head"><h3>'+new Date(sel).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</h3><button class="btn small" data-act="newevent" data-v="'+dayKey(sel)+'">Add booking</button></div>'+(se.length?se.map(e=>evLine(e,all)).join(''):'<div class="empty">Nothing booked. Tap another day, or add a booking.</div>')+'</section>';
   } else if(C.mode==='week'){
-    const w0=startOfWeek(C.cursor);from=w0;to=w0+7*DAYMS;
-    const w6=w0+6*DAYMS;title=fmtDate(w0,{day:'numeric',month:'short'})+' – '+fmtDate(w6,{day:'numeric',month:'short',year:'numeric'});
+    const w0=startOfWeek(C.cursor);from=w0;to=addDays(w0,7);
+    const w6=addDays(w0,6);title=fmtDate(w0,{day:'numeric',month:'short'})+' – '+fmtDate(w6,{day:'numeric',month:'short',year:'numeric'});
     const evs=all.filter(e=>e.start<to&&e.end>=w0);
     const H0=7,H1=21,HH=44;const hours=[];for(let h=H0;h<=H1;h++)hours.push(h);
-    const days=[];for(let i=0;i<7;i++)days.push(w0+i*DAYMS);
+    const days=[];for(let i=0;i<7;i++)days.push(addDays(w0,i));
     const gut='<div class="gut" style="height:'+((H1-H0)*HH)+'px">'+hours.map((h,i)=>'<span style="top:'+(i*HH)+'px">'+pad(h)+'</span>').join('')+'</div>';
     const cols=days.map(x=>{
       const de=evs.filter(e=>startOfDay(e.start)===x).sort((a,b)=>a.start-b.start);
@@ -976,7 +995,7 @@ function vSchedule(){
     const heads=days.map(x=>{const dd=new Date(x);const de=evs.filter(e=>startOfDay(e.start)===x);const tg=dayTags(de.filter(evVisible));return '<div class="wd'+(x===t0?' today':'')+(tg.shoot?' is-shoot':tg.edit?' is-edit':'')+'"><small>'+dd.toLocaleDateString('en-GB',{weekday:'short'})+'</small><b>'+dd.getDate()+'</b>'+tagHtml(tg)+'</div>'});
     body='<div class="wk-wrap"><div class="wgrid" style="--hh:'+HH+'px"><div class="wd"></div>'+heads.join('')+gut+cols.join('')+'</div></div><p class="note" style="margin-top:8px">Click an empty slot to book it. Amber outline: overlapping for the same person. Dashed: pencilled, not yet confirmed.</p>';
   } else {
-    const l0=startOfDay(C.cursor);from=l0;to=l0+28*DAYMS;title='Four weeks from '+fmtDate(l0,{day:'numeric',month:'long'});
+    const l0=startOfDay(C.cursor);from=l0;to=addDays(l0,28);title='Four weeks from '+fmtDate(l0,{day:'numeric',month:'long'});
     const evs=all.filter(e=>e.start<to&&e.end>=l0).sort((a,b)=>a.start-b.start);
     const byDay={};evs.forEach(e=>{const k=startOfDay(e.start);(byDay[k]=byDay[k]||[]).push(e)});
     const keys=Object.keys(byDay).map(Number).sort((a,b)=>a-b);
@@ -1001,8 +1020,8 @@ function vClients(){
   const cs=activeClients();
   const cards=cs.map(c=>{const u=unbilled(c.id);const li=lastInvoice(c.id);const r=rateCard(c);
     return '<button class="ccard" data-act="openclient" data-v="'+c.id+'"><div class="hd" style="background:'+c.colour+';color:'+contrast(c.colour)+'"><h3>'+esc(c.name)+'</h3>'+(r.billing==='retainer'?'<span class="pill" style="border-color:currentColor;color:inherit">Retainer</span>':'')+'</div>'+
-    '<div class="figs"><div><b>'+gbp(u.total)+'</b><span>To invoice</span></div><div><b>'+hrs(u.hours)+'</b><span>Time since last invoice</span></div></div>'+
-    '<div class="note">'+(()=>{const up=Object.values(S.events).filter(e=>e.clientId===c.id&&e.start>Date.now()&&e.status!=='cancelled');return up.length?gbp(up.reduce((s,e)=>s+eventValue(e),0))+' booked ahead · ':''})()+(li?'Last invoiced '+fmtDate(li.date,{day:'numeric',month:'short',year:'numeric'}):'Not invoiced yet')+'</div></button>'}).join('');
+    '<div class="figs"><div><b>'+gbp(u.total)+'</b><span>To invoice</span></div><div><b>'+gbp(annualValue(c)?annualValue(c)+bookedAhead(c.id).total:bookedAhead(c.id).total)+'</b><span>'+(annualValue(c)?'Annual value':'Booked ahead')+'</span></div></div>'+
+    '<div class="note">'+hrs(u.hours)+' since last invoice'+(li?' · last invoiced '+fmtDate(li.date,{day:'numeric',month:'short'}):'')+'</div></button>'}).join('');
   const arch=Object.values(S.clients).filter(c=>c.archived);
   return '<div class="panel-head"><h1>Clients</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="true">Clients</button><button data-act="sub" data-v="crew" aria-pressed="false">Crew</button></div><button class="btn small" data-act="newclient">Add client</button></div></div>'+
   (cs.length?'<div class="grid g3">'+cards+'</div>':'<div class="panel empty"><b>No clients yet.</b> Add a client with their colour and rates, and every hour you log against them is priced automatically.</div>')+
@@ -1031,7 +1050,7 @@ function openCrewModal(id){
 /* ===== booking form ===== */
 function miniCal(){
   const m=S.modal;const m0=startOfMonth(m.calMonth);const d=new Date(m0);const g0=startOfWeek(m0);const t0=startOfDay(Date.now());
-  const cells=[];for(let i=0;i<42;i++)cells.push(g0+i*DAYMS);const need=cells.slice(35).some(x=>new Date(x).getMonth()===d.getMonth())?42:35;
+  const cells=[];for(let i=0;i<42;i++)cells.push(addDays(g0,i));const need=cells.slice(35).some(x=>new Date(x).getMonth()===d.getMonth())?42:35;
   const ppl=PEOPLE.filter(p=>document.getElementById('v-p-'+p.id)?document.getElementById('v-p-'+p.id).checked:p.id===S.person).map(p=>p.id);
   let h='<div class="mc-head"><button type="button" class="link" data-act="mcnav" data-v="-1">‹</button><b>'+d.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><button type="button" class="link" data-act="mcnav" data-v="1">›</button></div><div class="mc">'+['M','T','W','T','F','S','S'].map(w=>'<small>'+w+'</small>').join('');
   cells.slice(0,need).forEach(x=>{const dd=new Date(x);const out=dd.getMonth()!==d.getMonth();const sel=m.days.includes(x);
@@ -1201,7 +1220,7 @@ document.addEventListener('click',async ev=>{
     case 'newtoken':saveCfg({...(cfg||{}),token:''});KEY=null;S.locked=true;render();break;
     case 'signout':if(!confirmed('signout')){toast('Press again to confirm removing all data from this device');break}signOut();break;
     case 'importpick':document.getElementById('importFile').click();break;
-    case 'calnav':{const C=S.cal;if(v==='0'){C.cursor=Date.now();C.sel=startOfDay(Date.now())}else{const n=Number(v);C.cursor=C.mode==='month'?addMonths(C.cursor,n):C.mode==='week'?C.cursor+n*7*DAYMS:C.cursor+n*28*DAYMS;if(C.mode==='month')C.sel=null}render();break}
+    case 'calnav':{const C=S.cal;if(v==='0'){C.cursor=Date.now();C.sel=startOfDay(Date.now())}else{const n=Number(v);C.cursor=C.mode==='month'?addMonths(C.cursor,n):C.mode==='week'?addDays(C.cursor,n*7):addDays(C.cursor,n*28);if(C.mode==='month')C.sel=null}render();break}
     case 'calmode':S.cal.mode=v;try{localStorage.setItem('qm-calmode',v)}catch(e){}render();break;
     case 'gotoday':S.view='schedule';S.cal.cursor=Number(v);S.cal.sel=Number(v);render();window.scrollTo(0,0);break;
     case 'selday':S.cal.sel=Number(v);render();break;
