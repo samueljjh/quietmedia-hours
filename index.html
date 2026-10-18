@@ -279,7 +279,8 @@ tfoot td{border-bottom:0;font-weight:400}
 .mcd{position:relative;background:var(--bg);border:1px solid var(--line);padding:8px 2px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--fg);cursor:pointer;min-height:38px}
 .mcd.out{opacity:.35}.mcd.today{text-decoration:underline;text-underline-offset:3px}.mcd.busy{border-color:var(--c)}.mcd.sel{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .mcd i{position:absolute;left:4px;right:4px;bottom:3px;height:3px;display:block}.mcd.sel i{background:var(--bg)!important}
-.crewlist{display:grid;gap:8px}.crewrow{display:grid;grid-template-columns:1fr 90px 120px;gap:8px;align-items:center}.crewrow .rate{min-height:38px;padding:6px 10px}.crewrow select{min-height:38px;padding:6px 10px}
+.crewlist{display:grid;gap:12px}.crewrow{display:grid;grid-template-columns:1fr 90px 120px;gap:6px 8px;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line)}.crewrow:last-child{border-bottom:0}
+.crewhint{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ratepick{background:transparent;border:1px solid var(--line-strong);padding:4px 8px;font-size:12px;color:var(--fg)}.ratepick span{color:var(--muted)}.ratepick:hover{border-color:var(--fg)}.crewrow .rate{min-height:38px;padding:6px 10px}.crewrow select{min-height:38px;padding:6px 10px}
 @media (max-width:520px){.crewrow{grid-template-columns:1fr 80px 100px}}
 .linkbox{display:flex;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--line);padding:8px 10px;font-size:12px}.linkbox span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;user-select:all}
 .lock{max-width:560px;margin:40px auto;padding:0 4px}
@@ -939,6 +940,9 @@ const STATUS_LABEL={pencil:'Pencil',confirmed:'Confirmed',booked:'Confirmed',can
 const evStatus=ev=>ev.status==='cancelled'?'cancelled':ev.status==='pencil'?'pencil':'confirmed';
 const activeCrew=()=>Object.values(S.crew).filter(c=>!c.archived).sort((a,b)=>a.name.localeCompare(b.name));
 const crewName=id=>(S.crew[id]||{}).name||'Crew';
+function ratesOf(c){if(c.rates&&c.rates.length)return c.rates.filter(r=>r.label&&+r.amount>0);const o=[];if(+c.dayRate>0)o.push({label:'Day',amount:+c.dayRate});if(+c.halfRate>0)o.push({label:'Half day',amount:+c.halfRate});return o}
+function payHistory(crewId){return Object.values(S.events).filter(e=>e.status!=='cancelled'&&(e.crew||[]).some(x=>x.id===crewId&&x.status!=='declined'&&+x.rate>0)).map(e=>({date:e.start,client:cname(e.clientId),title:e.title,type:e.type,rate:+((e.crew||[]).find(x=>x.id===crewId)||{}).rate||0,future:e.start>Date.now()})).sort((a,b)=>b.date-a.date)}
+function payRange(crewId){const h=payHistory(crewId).filter(x=>!x.future);if(!h.length)return null;const r=h.map(x=>x.rate);return {min:Math.min(...r),max:Math.max(...r),avg:r.reduce((a,b)=>a+b,0)/r.length,n:r.length,last:h[0]}}
 function crewCost(ev){return (ev.crew||[]).filter(x=>x.status!=='declined').reduce((s,x)=>s+(+x.rate||0),0)}
 function eventNet(ev){return eventValue(ev)-crewCost(ev)}
 function contrast(hex){const m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex||'');if(!m)return '#fff';const [r,g,b]=[1,2,3].map(i=>parseInt(m[i],16));return (r*299+g*587+b*114)/1000>150?'#0A0A0A':'#FFFFFF'}
@@ -1029,24 +1033,27 @@ function vClients(){
 }
 function vCrew(){
   const cs=activeCrew();const now=Date.now();const y0=new Date(new Date().getFullYear(),0,1).getTime();
-  const rows=cs.map(c=>{const evs=Object.values(S.events).filter(e=>e.status!=='cancelled'&&(e.crew||[]).some(x=>x.id===c.id&&x.status!=='declined'));
-    const past=evs.filter(e=>e.start<now&&e.start>=y0),future=evs.filter(e=>e.start>=now);
-    const paid=past.reduce((s,e)=>s+(+((e.crew||[]).find(x=>x.id===c.id)||{}).rate||0),0),ahead=future.reduce((s,e)=>s+(+((e.crew||[]).find(x=>x.id===c.id)||{}).rate||0),0);
-    return '<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left" data-act="editcrew" data-v="'+c.id+'">'+esc(c.name)+'</button><div class="note">'+esc(c.role||'')+(c.phone?' · '+esc(c.phone):'')+(c.email?' · '+esc(c.email):'')+'</div></td><td class="r">'+gbp(c.dayRate||0)+(c.halfRate?'<div class="note">'+gbp(c.halfRate)+' half</div>':'')+'</td><td class="r">'+past.length+'<div class="note">'+gbp(paid)+'</div></td><td class="r">'+future.length+'<div class="note">'+gbp(ahead)+'</div></td></tr>'}).join('');
+  const rows=cs.map(c=>{const h=payHistory(c.id);const past=h.filter(x=>!x.future&&x.date>=y0),future=h.filter(x=>x.future);const pr=payRange(c.id);const open=S.crewOpen===c.id;
+    return '<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left;font-weight:400" data-act="crewopen" data-v="'+c.id+'">'+esc(c.name)+'</button><div class="note">'+esc(c.role||'')+(c.phone?' · '+esc(c.phone):'')+(c.email?' · '+esc(c.email):'')+'</div></td><td>'+(ratesOf(c).map(r=>'<span class="chip" style="font-size:12px;margin-right:10px">'+gbp(r.amount)+' <span class="muted">'+esc(r.label)+'</span></span>').join('')||'<span class="muted">No rates set</span>')+'</td><td class="r">'+(pr?gbp(pr.min)+(pr.max!==pr.min?'–'+gbp(pr.max):'')+'<div class="note">'+pr.n+' job'+(pr.n===1?'':'s')+', avg '+gbp(pr.avg)+'</div>':'<span class="muted">—</span>')+'</td><td class="r">'+future.length+'<div class="note">'+gbp(future.reduce((s,x)=>s+x.rate,0))+'</div></td><td class="r"><button class="btn ghost small" data-act="editcrew" data-v="'+c.id+'">Edit</button></td></tr>'+
+    (open?'<tr><td colspan="5" style="padding:0 0 14px"><div class="panel" style="padding:14px"><div class="panel-head"><h3 class="small" style="font-size:16px">What we have paid '+esc(c.name.split(' ')[0])+'</h3><span class="note">Newest first</span></div>'+(h.length?'<div class="tbl"><table><thead><tr><th>Date</th><th>Job</th><th>Client</th><th class="r">Paid</th></tr></thead><tbody>'+h.slice(0,24).map(x=>'<tr'+(x.future?' style="color:var(--muted)"':'')+'><td>'+fmtDate(x.date,{day:'numeric',month:'short',year:'numeric'})+(x.future?' <span class="pill">ahead</span>':'')+'</td><td>'+esc(x.title)+' <span class="muted">· '+esc(x.type)+'</span></td><td>'+esc(x.client)+'</td><td class="r">'+gbp(x.rate)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="note">No jobs yet.</p>')+(c.notes?'<p class="note" style="margin-top:10px">'+esc(c.notes)+'</p>':'')+'</div></td></tr>':'')}).join('');
   return '<div class="panel-head"><h1>Crew</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="false">Clients</button><button data-act="sub" data-v="crew" aria-pressed="true">Crew</button></div><button class="btn small" data-act="newcrew">Add crew</button></div></div>'+
-  (cs.length?'<section class="panel"><div class="tbl"><table><thead><tr><th>Name</th><th class="r">Day rate</th><th class="r">Days this year</th><th class="r">Booked ahead</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" style="margin-top:12px">Rates here are defaults. Change the rate on any booking when a job is different.</p></section>':'<div class="panel empty"><b>No crew yet.</b> Add the freelancers you work with and their day rates, then add them to bookings. Every booking then shows what you keep after paying them.</div>');
+  (cs.length?'<section class="panel"><div class="tbl"><table><thead><tr><th>Name</th><th>Rates</th><th class="r">Paid before</th><th class="r">Booked ahead</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" style="margin-top:12px">Tap a name to see every job and what you paid. Rates are starting points; the agreed fee is set on each booking.</p></section>':'<div class="panel empty"><b>No crew yet.</b> Add the freelancers you work with and their rates, then add them to bookings. Every booking then shows what you keep after paying them.</div>');
 }
 function openCrewModal(id){
-  const c=id?{...S.crew[id]}:{name:'',role:'',dayRate:'',halfRate:'',email:'',phone:'',notes:''};
-  S.modal={type:'crew',c,html:()=>'<h2>'+(id?'Edit crew':'New crew')+'</h2>'+
+  const base=id?{...S.crew[id]}:{name:'',role:'',email:'',phone:'',notes:''};
+  const c={...base,rates:ratesOf(base).length?ratesOf(base).map(r=>({...r})):[{label:'Day',amount:''},{label:'Half day',amount:''}]};
+  S.modal={type:'crew',c,html:()=>{const c=S.modal.c;return '<h2>'+(id?'Edit crew':'New crew')+'</h2>'+
     '<div class="row"><label class="f">Name<input type="text" id="w-name" value="'+esc(c.name)+'"></label><label class="f">Role<input type="text" id="w-role" value="'+esc(c.role||'')+'" placeholder="Camera op, sound, assistant"></label></div>'+
-    '<div class="row"><label class="f">Day rate (£)<input type="number" id="w-day" value="'+(c.dayRate||'')+'"></label><label class="f">Half day (£)<input type="number" id="w-half" value="'+(c.halfRate||'')+'"></label></div>'+
+    '<div><div class="eyebrow" style="margin-bottom:8px">Rates</div><div class="grid" style="gap:8px">'+c.rates.map((r,i)=>'<div class="row" style="flex-wrap:nowrap"><input type="text" data-rl="'+i+'" value="'+esc(r.label)+'" placeholder="e.g. Day, Half day, Long day, Travel" style="flex:2"><input type="number" data-ra="'+i+'" value="'+(r.amount||'')+'" placeholder="£" style="flex:1"><button type="button" class="link" data-act="raterm" data-v="'+i+'" aria-label="Remove rate" style="flex:0 0 auto">✕</button></div>').join('')+'</div><div style="margin-top:8px"><button type="button" class="link" data-act="rateadd">Add another rate</button></div></div>'+
     '<div class="row"><label class="f">Mobile<input type="tel" id="w-phone" value="'+esc(c.phone||'')+'"></label><label class="f">Email<input type="email" id="w-email" value="'+esc(c.email||'')+'"></label></div>'+
-    '<label class="f">Notes<textarea id="w-notes" rows="2">'+esc(c.notes||'')+'</textarea></label>'+
-    '<div class="acts">'+(id?'<button class="btn ghost small" data-act="archcrew" data-v="'+id+'">'+(c.archived?'Restore':'Archive')+'</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="savecrew" data-v="'+(id||'')+'">Save</button></div>'};
+    '<label class="f">Notes<textarea id="w-notes" rows="2" placeholder="Strengths, kit they bring, how they like to be booked…">'+esc(c.notes||'')+'</textarea></label>'+
+    '<div class="acts">'+(id?'<button class="btn ghost small" data-act="archcrew" data-v="'+id+'">'+(c.archived?'Restore':'Archive')+'</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="savecrew" data-v="'+(id||'')+'">Save</button></div>'}};
   renderModal();
 }
-
+function readCrewModal(){const c=S.modal.c;const g=id=>{const el=document.getElementById(id);return el?el.value:undefined};
+  if(g('w-name')!==undefined){c.name=g('w-name').trim();c.role=g('w-role').trim();c.phone=g('w-phone').trim();c.email=g('w-email').trim();c.notes=g('w-notes').trim()}
+  c.rates=c.rates.map((r,i)=>{const l=document.querySelector('[data-rl="'+i+'"]'),a=document.querySelector('[data-ra="'+i+'"]');return {label:l?l.value.trim():r.label,amount:a?(+a.value||''):r.amount}});
+}
 /* ===== booking form ===== */
 function miniCal(){
   const m=S.modal;const m0=startOfMonth(m.calMonth);const d=new Date(m0);const g0=startOfWeek(m0);const t0=startOfDay(Date.now());
@@ -1082,7 +1089,12 @@ function openEventModal(evid,date,startAt,presetClient){
 function crewSection(){
   const cs=activeCrew();const sel=S.modal.crewSel;
   if(!cs.length)return '<p class="note">No crew yet. Add freelancers under Clients → Crew to book them on jobs.</p>';
-  return '<div><div class="eyebrow" style="margin-bottom:8px">Crew</div><div class="crewlist">'+cs.map(c=>{const x=sel[c.id];return '<div class="crewrow"><label class="chip"><input type="checkbox" data-crew="'+c.id+'" '+(x?'checked':'')+'> '+esc(c.name)+'<span class="muted"> '+esc(c.role||'')+'</span></label><input type="number" class="rate" data-crewrate="'+c.id+'" value="'+(x?x.rate:(c.dayRate||''))+'" placeholder="£" aria-label="Rate for '+esc(c.name)+'"'+(x?'':' disabled')+'>'+(x?'<select data-crewst="'+c.id+'"><option value="pencil" '+(x.status==='pencil'||!x.status?'selected':'')+'>Pencil</option><option value="confirmed" '+(x.status==='confirmed'?'selected':'')+'>Confirmed</option><option value="declined" '+(x.status==='declined'?'selected':'')+'>Declined</option></select>':'<span></span>')+'</div>'}).join('')+'</div></div>';
+  return '<div><div class="eyebrow" style="margin-bottom:8px">Crew · agreed fee for this job</div><div class="crewlist">'+cs.map(c=>{const x=sel[c.id];const rates=ratesOf(c);const pr=payRange(c.id);
+    const hint=pr?'Paid before: '+gbp(pr.min)+(pr.max!==pr.min?'–'+gbp(pr.max):'')+' over '+pr.n+' job'+(pr.n===1?'':'s')+' · last '+gbp(pr.last.rate)+' ('+esc(pr.last.client)+')':(rates.length?'Not booked before. Rate card: '+rates.map(r=>gbp(r.amount)+' '+esc(r.label).toLowerCase()).join(', '):'Not booked before, no rates set.');
+    return '<div class="crewrow"><label class="chip"><input type="checkbox" data-crew="'+c.id+'" '+(x?'checked':'')+'> '+esc(c.name)+'<span class="muted"> '+esc(c.role||'')+'</span></label>'+
+    '<input type="number" class="rate" data-crewrate="'+c.id+'" list="rates-'+c.id+'" value="'+(x?x.rate:(rates[0]?rates[0].amount:''))+'" placeholder="£" aria-label="Agreed fee for '+esc(c.name)+'"'+(x?'':' disabled')+'><datalist id="rates-'+c.id+'">'+rates.map(r=>'<option value="'+r.amount+'">'+esc(r.label)+'</option>').join('')+'</datalist>'+
+    (x?'<select data-crewst="'+c.id+'"><option value="pencil" '+(x.status==='pencil'||!x.status?'selected':'')+'>Pencil</option><option value="confirmed" '+(x.status==='confirmed'?'selected':'')+'>Confirmed</option><option value="declined" '+(x.status==='declined'?'selected':'')+'>Declined</option></select>':'<span></span>')+
+    '<div class="crewhint">'+(rates.length?rates.map(r=>'<button type="button" class="ratepick" data-act="ratepick" data-c="'+c.id+'" data-v="'+r.amount+'">'+gbp(r.amount)+' <span>'+esc(r.label)+'</span></button>').join(''):'')+'<span class="note">'+hint+'</span></div></div>'}).join('')+'</div></div>';
 }
 function readCrewForm(){const sel={};document.querySelectorAll('[data-crew]').forEach(cb=>{if(cb.checked){const id=cb.dataset.crew;const rate=document.querySelector('[data-crewrate="'+id+'"]');const st=document.querySelector('[data-crewst="'+id+'"]');sel[id]={id,rate:+(rate&&rate.value)||0,status:st?st.value:((S.modal.crewSel[id]||{}).status||'pencil')}}});S.modal.crewSel=sel}
 function availNote(){const n=document.getElementById('v-availnote');if(!n)return;const m=S.modal;const ppl=PEOPLE.filter(p=>document.getElementById('v-p-'+p.id)?.checked).map(p=>p.id);
@@ -1206,7 +1218,11 @@ document.addEventListener('click',async ev=>{
     case 'sub':S.sub=v;render();break;
     case 'newcrew':openCrewModal();break;
     case 'editcrew':openCrewModal(v);break;
-    case 'savecrew':{const g=id=>document.getElementById(id).value.trim();const c={...S.modal.c,name:g('w-name'),role:g('w-role'),dayRate:+g('w-day')||0,halfRate:+g('w-half')||0,phone:g('w-phone'),email:g('w-email'),notes:g('w-notes')};if(!c.name){document.getElementById('w-name').focus();return}closeModal();await put('crew',v||null,stripId(c));toast('Saved '+c.name);break}
+    case 'savecrew':{readCrewModal();const c={...S.modal.c};c.rates=c.rates.filter(r=>r.label&&+r.amount>0);c.dayRate=c.rates.length?c.rates[0].amount:0;delete c.halfRate;if(!c.name){document.getElementById('w-name').focus();return}closeModal();await put('crew',v||null,stripId(c));toast('Saved '+c.name);break}
+    case 'ratepick':{const cb=document.querySelector('[data-crew="'+b.dataset.c+'"]');const r=document.querySelector('[data-crewrate="'+b.dataset.c+'"]');if(cb&&!cb.checked){cb.checked=true;r.disabled=false}if(r){r.value=v}readCrewForm();break}
+    case 'rateadd':readCrewModal();S.modal.c.rates.push({label:'',amount:''});renderModal();break;
+    case 'raterm':readCrewModal();S.modal.c.rates.splice(Number(v),1);if(!S.modal.c.rates.length)S.modal.c.rates.push({label:'Day',amount:''});renderModal();break;
+    case 'crewopen':S.crewOpen=S.crewOpen===v?null:v;render();break;
     case 'archcrew':{const c=S.crew[v];closeModal();await patch('crew',v,{archived:!c.archived});break}
     case 'mcnav':readCrewForm();S.modal.calMonth=addMonths(S.modal.calMonth,Number(v));availNote();break;
     case 'mcpick':{readCrewForm();const d=Number(v);const m=S.modal;if(m.evid){m.days=[d]}else{const i=m.days.indexOf(d);if(i>=0)m.days.splice(i,1);else m.days.push(d)}availNote();feeNote();break}
