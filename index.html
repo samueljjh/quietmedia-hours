@@ -283,6 +283,17 @@ tfoot td{border-bottom:0;font-weight:400}
 .crewhint{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ratepick{background:transparent;border:1px solid var(--line-strong);padding:4px 8px;font-size:12px;color:var(--fg)}.ratepick span{color:var(--muted)}.ratepick:hover{border-color:var(--fg)}.crewrow .rate{min-height:38px;padding:6px 10px}.crewrow select{min-height:38px;padding:6px 10px}
 @media (max-width:520px){.crewrow{grid-template-columns:1fr 80px 100px}}
 .linkbox{display:flex;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--line);padding:8px 10px;font-size:12px}.linkbox span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;user-select:all}
+.pcard{background:var(--bg);border:1px solid var(--line);padding:14px;display:grid;gap:10px;min-width:0}
+.pc-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.pc-head .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-figs{display:flex;gap:18px;flex-wrap:wrap}.pc-figs div{display:grid}.pc-figs b{font-weight:300;font-size:20px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}.pc-figs span{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--tan)}
+.plan{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}.plan .chip.todo{color:var(--warn)}
+.ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px}
+.ycard{background:var(--surface);border:1px solid var(--line);padding:14px;display:grid;gap:10px;text-align:left;color:var(--fg);cursor:pointer;min-width:0}
+.ycard:hover{border-color:var(--line-strong)}.ycard.now{box-shadow:inset 0 0 0 1px var(--fg)}.ycard.past{opacity:.75}
+.yh{display:flex;justify-content:space-between;align-items:baseline}.yh b{font-weight:300;font-size:20px;letter-spacing:-.3px}
+.ymini{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.ymini i{display:block;aspect-ratio:1;background:var(--line)}.ymini i.out{opacity:0}.ymini i.other{background:var(--c,var(--line-strong))}.ymini i.edit{background:var(--c,var(--tan));opacity:.6}.ymini i.shoot{background:var(--c,var(--fg));box-shadow:inset 0 0 0 1.5px var(--fg)}.ymini i.off{background:repeating-linear-gradient(135deg,var(--line) 0 2px,transparent 2px 4px)}.ymini i.pencil{background:transparent;border:1px dashed var(--c,var(--muted))}
+.ybar{height:4px;background:var(--line)}.ybar i{display:block;height:100%;background:var(--fg)}
+.yfigs{display:flex;gap:14px;flex-wrap:wrap}.yfigs div{display:grid}.yfigs b{font-weight:300;font-size:18px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}.yfigs span{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--tan)}
 .lock{max-width:560px;margin:40px auto;padding:0 4px}
 /* modal */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:grid;place-items:center;padding:16px}
@@ -330,7 +341,7 @@ const BUSY_TYPES={Shoot:1,Edit:1,Unavailable:1};
 const DEFAULT_TERMS='A pencil holds the dates for you without obligation on either side. Once you confirm, the dates are yours and we turn other work away for them.\n\nMoving or cancelling a confirmed booking: free with more than 7 days\u2019 notice (one move per booking). Within 7 days, 50% of the fee is payable. Within 48 hours, the full fee is payable.\n\nFees are ex VAT and exclude travel and expenses, which are agreed in advance and itemised on the invoice. Payment is due within 30 days of invoice.\n\nWeather, access or illness on our side: we will offer the next available dates at no charge.';
 const DEF_SETTINGS = {names:{samuel:'Samuel',tamy:'Tamy'},vatRate:20,prefix:'QM-',nextInvoice:1001,terms:30,accountCode:'200',monthlyGoal:0,weeklyHoursTarget:0,availPublish:true,availWeeks:12,availWeekends:false,availEmail:'hello@quietmedia.co.uk',availMinHours:3,senderName:'Samuel',replyEmail:'hello@quietmedia.co.uk',replyPhone:'',pencilDays:7,bookingTerms:DEFAULT_TERMS};
 
-const S = {clients:{},crew:{},entries:{},invoices:{},events:{},settings:{...DEF_SETTINGS},
+const S = {clients:{},crew:{},projects:{},entries:{},invoices:{},events:{},settings:{...DEF_SETTINGS},
   view:'today',client:null,week:0,period:'month',draft:{},modal:null,live:false,writable:true,loaded:{},
   cal:{mode:matchMedia('(max-width:720px)').matches?'month':'week',cursor:Date.now(),sel:null}};
 try{const cm=localStorage.getItem('qm-calmode');if(cm)S.cal.mode=cm}catch(e){}
@@ -368,7 +379,7 @@ function toast(msg){const r=$('#toastRoot');r.innerHTML='<div class="toast" role
    Every collection is one file, data/<col>.json, holding {v, iv, ct}: AES-GCM-256 ciphertext.
    The key comes from the shared passphrase via PBKDF2 (salt stored in plain text in meta.json).
    GitHub only ever sees ciphertext. Each device caches the ciphertext locally so the app opens offline. */
-const COLS=['clients','crew','entries','invoices','events','settings'];
+const COLS=['clients','crew','projects','entries','invoices','events','settings'];
 const DEAD={};            // tombstones per collection: {id: deletedAt}
 const SHA={};             // last known file sha per collection
 const DIRTY={};           // collections with unsaved local changes
@@ -555,10 +566,10 @@ function suggestFee(ev){
   if(ev.type==='Edit'){if(r.billing==='hourly')return Math.round(h*r.hourlyRate);return r.editDay*Math.max(1,Math.ceil(h/r.editHours-1e-9))}
   return 0;
 }
-function eventValue(ev){return ev.fee!=null&&ev.fee!==''?+ev.fee||0:suggestFee(ev)}
+function eventValue(ev){if(ev.projectId)return +ev.fee||0;return ev.fee!=null&&ev.fee!==''?+ev.fee||0:suggestFee(ev)}
 const linesTotal=ls=>ls.reduce((s,l)=>s+l.qty*l.unit,0);
 /* Bookings that have happened, carry a fee, and are not yet on an invoice */
-function billableBookings(cid){const now=Date.now();return Object.values(S.events).filter(e=>e.clientId===cid&&!e.invoiceId&&e.status!=='cancelled'&&e.status!=='pencil'&&e.start<=now&&eventValue(e)>0).sort((a,b)=>a.start-b.start)}
+function billableBookings(cid){const now=Date.now();return Object.values(S.events).filter(e=>e.clientId===cid&&!e.invoiceId&&e.status!=='cancelled'&&e.status!=='pencil'&&e.start<=now&&eventValue(e)>0&&!e.projectId).sort((a,b)=>a.start-b.start)}
 function bookingLine(e){return {desc:e.title+' ('+fmtDate(e.start,{day:'numeric',month:'short'})+(e.type?', '+e.type.toLowerCase():'')+')',qty:1,unit:eventValue(e),eventId:e.id}}
 /* Retainer periods: monthly, quarterly, termly (school terms) or yearly. Each period has a key, label, start and end. */
 const PERIODS_PER_YEAR={month:12,quarter:4,term:3,year:1};
@@ -593,25 +604,41 @@ function retainerDelivery(c,k){
   return {key:k,label:pr.label,start:a,end:b,hours,promised,days:r.retainerDayHours?hours/r.retainerDayHours:0,pct:promised?hours/promised*100:0,byPerson,byCat,fee:r.monthlyFee};
 }
 function annualValue(c){const r=rateCard(c);return r.billing==='retainer'?r.monthlyFee*(PERIODS_PER_YEAR[r.retainerPeriod||'month']||12):0}
-function bookedAhead(cid){const now=Date.now();const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>now&&e.status!=='cancelled');return {count:evs.length,total:evs.reduce((s,e)=>s+eventValue(e),0),pencil:evs.filter(e=>evStatus(e)==='pencil').reduce((s,e)=>s+eventValue(e),0)}}
+function bookedAhead(cid){const now=Date.now();const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>now&&e.status!=='cancelled');const ps=activeProjects(cid).filter(p=>pstatus(p)==='active');return {count:evs.length,projects:ps.length,total:evs.reduce((s,e)=>s+eventValue(e),0)+ps.reduce((s,p)=>s+(+p.fee||0),0),pencil:evs.filter(e=>evStatus(e)==='pencil').reduce((s,e)=>s+eventValue(e),0)}}
+/* ===== projects: the thing a client buys. Fee on the project; bookings are allocated days. ===== */
+const PLAN_TYPES=['Shoot','Edit','Meeting','Other'];
+const project=id=>S.projects[id];
+const pstatus=p=>p.invoiceId?'invoiced':(p.status||'active');
+function projectBookings(pid){return Object.values(S.events).filter(e=>e.projectId===pid&&e.status!=='cancelled').sort((a,b)=>a.start-b.start)}
+function projectAllocated(p){const o={};projectBookings(p.id).forEach(e=>{const k=e.type==='Shoot'?'Shoot':e.type==='Edit'?'Edit':e.type==='Meeting'?'Meeting':'Other';o[k]=(o[k]||0)+1});return o}
+function planRemaining(p){const al=projectAllocated(p);return (p.plan||[]).map(x=>({type:x.type,planned:+x.days||0,allocated:al[x.type]||0,remaining:Math.max(0,(+x.days||0)-(al[x.type]||0))}))}
+function projectCost(p){return projectBookings(p.id).reduce((s,e)=>s+crewCost(e),0)}
+function projectHours(p){return Object.values(S.entries).filter(e=>e.projectId===p.id).reduce((s,e)=>s+entryH(e),0)}
+function projectAnchor(p){const b=projectBookings(p.id);return p.completedAt||(b.length?b[b.length-1].start:p.created||Date.now())}
+function activeProjects(cid){return Object.values(S.projects).filter(p=>(!cid||p.clientId===cid)&&pstatus(p)!=='cancelled').sort((a,b)=>(a.created||0)-(b.created||0))}
+function billableProjects(cid){return activeProjects(cid).filter(p=>pstatus(p)==='complete'&&+p.fee>0)}
+function projectOptions(cid,sel){const ps=activeProjects(cid).filter(p=>pstatus(p)==='active'||p.id===sel);return '<option value="">No project (one-off booking with its own fee)</option>'+ps.map(p=>'<option value="'+p.id+'" '+(p.id===sel?'selected':'')+'>'+esc(p.title)+' · '+gbp(p.fee)+(planRemaining(p).some(x=>x.remaining)?' · '+planRemaining(p).filter(x=>x.remaining).map(x=>x.remaining+' '+x.type.toLowerCase()).join(', ')+' to allocate':'')+'</option>').join('')}
+function projectsToAllocate(){return activeProjects().filter(p=>pstatus(p)==='active').map(p=>({p,rem:planRemaining(p).filter(x=>x.remaining)})).filter(x=>x.rem.length)}
 function unbilled(cid){
   const c=client(cid);const li=lastInvoice(cid);const since=li?li.date:0;
   const bookings=billableBookings(cid);
   const lines=bookings.map(bookingLine);
   const r=rateCard(c);const retMonths=r.billing==='retainer'&&r.monthlyFee?retainerMonths(c).filter(k=>!(c.retainerInvoiced||{})[k]):[];
   retMonths.forEach(k=>lines.push({desc:'Retainer, '+periodByKey(c,k).label,qty:1,unit:r.monthlyFee,month:k}));
+  const projs=billableProjects(cid);projs.forEach(p=>lines.push({desc:p.title+(p.plan&&p.plan.length?' ('+p.plan.map(x=>x.days+' '+(x.type==='Shoot'?'filming':x.type.toLowerCase())+' day'+(x.days==1?'':'s')).join(', ')+')':''),qty:1,unit:+p.fee||0,projectId:p.id}));
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=since);
   const done=es.filter(e=>e.end);
   const hours=done.reduce((s,e)=>s+entryH(e),0);
   const billH=done.filter(e=>e.billable!==false).reduce((s,e)=>s+entryH(e),0);
   const byPerson={};done.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e)});
-  return {bookings,retMonths,entries:es,done,lines,total:linesTotal(lines),hours,billH,byPerson,since};
+  return {bookings,retMonths,projs,entries:es,done,lines,total:linesTotal(lines),hours,billH,byPerson,since};
 }
 /* Client value over a period: fees for bookings in the period vs hours logged in the period */
 function clientValue(cid,from,to){
   const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=from&&e.start<to);
   let fees=evs.reduce((s,e)=>s+eventValue(e),0);
   const c=client(cid);if(c&&rateCard(c).billing==='retainer'){fees+=retainerPeriods(c,to-1).filter(p=>p.end>from).length*rateCard(c).monthlyFee}
+  activeProjects(cid).forEach(p=>{const a=projectAnchor(p);if(a>=from&&a<to)fees+=+p.fee||0});
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=from&&e.start<to);
   const hours=es.reduce((s,e)=>s+entryH(e),0);
   const byPerson={};es.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e)});
@@ -628,7 +655,8 @@ async function startTimer(){
   const cat=d.category||'Filming';
   const prev=running(S.person);
   if(prev) await patch('entries',prev.id,{end:Date.now()});
-  await put('entries',null,{person:S.person,clientId:cid,category:cat,task:(d.task||'').trim(),start:Date.now(),end:null,billable:BILLABLE_DEFAULT[cat]!==false,created:Date.now()});
+  const pj=d.projectId&&S.projects[d.projectId]&&S.projects[d.projectId].clientId===cid?d.projectId:'';
+  await put('entries',null,{person:S.person,clientId:cid,projectId:pj,category:cat,task:(d.task||'').trim(),start:Date.now(),end:null,billable:BILLABLE_DEFAULT[cat]!==false,created:Date.now()});
   S.draft.task='';render();toast('Clocked in for '+cname(cid));
 }
 async function stopTimer(p){const e=running(p);if(!e)return;await patch('entries',e.id,{end:Date.now()});toast('Clocked out. '+hrs(entryH({...e,end:Date.now()}))+' logged to '+cname(e.clientId))}
@@ -639,15 +667,17 @@ async function createInvoice(cid){
   const num=(S.settings.prefix||'')+(S.settings.nextInvoice||1001);
   const sub=u.total;const vat=c.vat===false?0:sub*(+S.settings.vatRate||0)/100;
   const starts=u.bookings.map(e=>e.start).concat(u.retMonths.map(k=>periodByKey(c,k).start));const ends=u.bookings.map(e=>e.end).concat(u.retMonths.map(k=>periodByKey(c,k).end-1));const from=Math.min(...starts);const to=Math.max(...ends);
-  const id=await put('invoices',null,{clientId:cid,number:num,date:Date.now(),from,to,lines:u.lines,subtotal:sub,vat,total:sub+vat,hours:u.hours,status:'draft',eventIds:u.bookings.map(e=>e.id),retMonths:u.retMonths});
+  const id=await put('invoices',null,{clientId:cid,number:num,date:Date.now(),from,to,lines:u.lines,subtotal:sub,vat,total:sub+vat,hours:u.hours,status:'draft',eventIds:u.bookings.map(e=>e.id),retMonths:u.retMonths,projectIds:(u.projs||[]).map(p=>p.id)});
   await saveSettings({nextInvoice:(+S.settings.nextInvoice||1001)+1});
   for(const e of u.bookings){await patch('events',e.id,{invoiceId:id})}
   if(u.retMonths.length){const ri={...(c.retainerInvoiced||{})};u.retMonths.forEach(k=>ri[k]=id);await patch('clients',cid,{retainerInvoiced:ri})}
+  for(const p of (u.projs||[])){await patch('projects',p.id,{invoiceId:id})}
   toast('Invoice '+num+' created with '+u.lines.length+' line'+(u.lines.length===1?'':'s')+'.');
 }
 async function undoInvoice(iid){
   const inv=S.invoices[iid];if(!inv)return;
   for(const eid of (inv.eventIds||[])){if(S.events[eid])await patch('events',eid,{invoiceId:null})}
+  for(const pid of (inv.projectIds||[])){if(S.projects[pid])await patch('projects',pid,{invoiceId:null})}
   const c=client(inv.clientId);if(c&&(inv.retMonths||[]).length){const ri={...(c.retainerInvoiced||{})};inv.retMonths.forEach(k=>delete ri[k]);await patch('clients',inv.clientId,{retainerInvoiced:ri})}
   await remove('invoices',iid);S.modal=null;renderModal();toast('Invoice removed. Its bookings are back in "to invoice".');
 }
@@ -733,6 +763,7 @@ function vToday(){
       '<div class="big muted">00:00:00</div>'+quick+
       '<div class="row"><label class="f">Client<select id="d-client" data-draft="clientId">'+clientOptions(d.clientId||cs[0].id)+'</select></label>'+
       '<label class="f">Work<select id="d-cat" data-draft="category">'+catOptions(d.category||'Filming')+'</select></label></div>'+
+      (()=>{const ps=activeProjects(d.clientId||cs[0].id).filter(p=>pstatus(p)==='active');return ps.length?'<label class="f">Project<select id="d-project" data-draft="projectId"><option value="">None</option>'+ps.map(p=>'<option value="'+p.id+'" '+(d.projectId===p.id?'selected':'')+'>'+esc(p.title)+'</option>').join('')+'</select></label>':''})()+
       '<label class="f">What are you working on<input type="text" id="d-task" data-draft="task" placeholder="Edit first cut, location recce…" value="'+esc(d.task||'')+'"></label>'+
       '<div class="row" style="align-items:center"><button class="btn" data-act="start" '+('')+'>Clock in</button><button class="link" data-act="manual">Add time manually</button></div>'
       :'<div class="empty"><b>Add your first client</b> to start clocking time.<br><br><button class="btn" data-act="newclient">Add client</button></div>';
@@ -750,7 +781,7 @@ function vToday(){
   const toInv=activeClients().reduce((s,c)=>s+unbilled(c.id).total,0);const nToInv=activeClients().reduce((s,c)=>s+unbilled(c.id).lines.length,0);
   return '<div class="panel-head"><h1>'+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</h1><button class="eyebrow num link" style="text-decoration:none" data-act="nav" data-v="invoicing">'+gbp(toInv)+' to invoice · '+nToInv+' line'+(nToInv===1?'':'s')+'</button></div>'+
   '<div class="grid g2">'+cards+'</div>'+
-  (pencilsPanel()?'<div style="margin-top:16px">'+pencilsPanel()+'</div>':'')+
+  ((pencilsPanel()||allocatePanel())?'<div class="grid g2" style="margin-top:16px">'+allocatePanel()+pencilsPanel()+'</div>':'')+
   '<div class="grid g2" style="margin-top:16px"><section class="panel"><div class="panel-head"><h3>Logged today</h3><button class="link" data-act="manual">Add time</button></div><div class="list">'+list+'</div></section>'+
   '<section class="panel"><div class="panel-head"><h3>Coming up</h3><button class="link" data-act="nav" data-v="schedule">Schedule</button></div><div class="list">'+upl+'</div></section></div>';
 }
@@ -788,14 +819,15 @@ function vClient(cid){
   const ents=u.entries.sort((a,b)=>b.start-a.start);
   const upcoming=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>Date.now()&&e.status!=='cancelled').sort((a,b)=>a.start-b.start);
   return '<button class="link back" data-act="closeclient">← All clients</button>'+
-  '<div class="panel-head"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="dot" style="width:16px;height:16px;background:'+c.colour+'"></span><h1>'+esc(c.name)+'</h1></div><div class="row" style="flex:0 1 auto"><button class="btn ghost small" data-act="editclient" data-v="'+cid+'">Edit client &amp; rates</button><button class="btn ghost small" data-act="newevent" data-c="'+cid+'">Book work</button><button class="btn small" data-act="invoice" data-v="'+cid+'" '+(u.lines.length?'':'disabled')+'>Create invoice</button></div></div>'+
+  '<div class="panel-head"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="dot" style="width:16px;height:16px;background:'+c.colour+'"></span><h1>'+esc(c.name)+'</h1></div><div class="row" style="flex:0 1 auto"><button class="btn ghost small" data-act="editclient" data-v="'+cid+'">Edit client &amp; rates</button><button class="btn ghost small" data-act="newproject" data-c="'+cid+'">New project</button><button class="btn ghost small" data-act="newevent" data-c="'+cid+'">Book a day</button><button class="btn small" data-act="invoice" data-v="'+cid+'" '+(u.lines.length?'':'disabled')+'>Create invoice</button></div></div>'+
   (()=>{const ba=bookedAhead(cid);const av=annualValue(c);const cc=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=y0).reduce((t,e)=>t+crewCost(e),0);
   return '<div class="grid g3" style="margin-bottom:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))"><div class="panel stat"><span class="eyebrow">To invoice</span><span class="v">'+gbp(u.total)+'</span><span class="s">'+u.lines.length+' line'+(u.lines.length===1?'':'s')+(c.vat===false?' · no VAT':' · + '+gbp(u.total*(+S.settings.vatRate||0)/100)+' VAT')+'</span></div>'+
-  '<div class="panel stat"><span class="eyebrow">Booked ahead</span><span class="v">'+gbp(ba.total)+'</span><span class="s">'+ba.count+' booking'+(ba.count===1?'':'s')+(ba.pencil?' · '+gbp(ba.pencil)+' pencilled':'')+'</span></div>'+
+  '<div class="panel stat"><span class="eyebrow">Booked ahead</span><span class="v">'+gbp(ba.total)+'</span><span class="s">'+ba.count+' booking'+(ba.count===1?'':'s')+(ba.projects?' · '+ba.projects+' open project'+(ba.projects===1?'':'s'):'')+(ba.pencil?' · '+gbp(ba.pencil)+' pencilled':'')+'</span></div>'+
   '<div class="panel stat"><span class="eyebrow">'+(av?'Annual value':'Value this year')+'</span><span class="v">'+gbp(av?av+ba.total:cv.fees)+'</span><span class="s">'+(av?gbp(r.monthlyFee)+' per '+(r.retainerPeriod||'month')+(ba.total?' + '+gbp(ba.total)+' booked extras':''):gbp(cv.fees)+' in fees'+(cc?', '+gbp(cc)+' crew, '+gbp(cv.fees-cc)+' net':''))+'</span></div>'+
   '<div class="panel stat"><span class="eyebrow">Time since '+(li?esc(li.number)+', '+fmtDate(li.date):'the start')+'</span><span class="v">'+hrs(u.hours)+'</span><span class="s">'+(cv.hours?gbp(cv.rate)+'/hr this year · ':'')+hrs(u.hours-u.billH)+' admin, meetings, travel</span></div></div>'})()+
   '<div class="split"><div class="grid" style="align-content:start">'+(r.billing==='retainer'?retainerPanel(c):'')+'<section class="panel"><div class="panel-head"><h3>Ready to invoice</h3><span class="note">Fees are fixed when the work is booked.</span></div>'+lines+'</section>'+
-  (upcoming.length?'<section class="panel"><div class="panel-head"><h3>Booked, not yet done</h3><span class="note num">'+gbp(upcoming.reduce((s,e)=>s+eventValue(e),0))+' coming</span></div><div class="list">'+upcoming.slice(0,6).map(e=>'<div class="item" style="cursor:pointer" data-act="gotoday" data-v="'+startOfDay(e.start)+'"><span class="sw" style="background:'+c.colour+'"></span><div class="main"><div class="t">'+esc(e.title)+'</div><div class="meta">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+fmtTime(e.start)+'–'+fmtTime(e.end)+' · '+esc(e.type)+'</div></div><div class="end"><span class="num">'+gbp(eventValue(e))+'</span></div></div>').join('')+'</div></section>':'')+
+  (()=>{const ps=activeProjects(cid).filter(p=>pstatus(p)!=='invoiced');return ps.length?'<section class="panel"><div class="panel-head"><h3>Projects</h3><span class="note num">'+gbp(ps.reduce((s,p)=>s+(+p.fee||0),0))+' · '+gbp(ps.reduce((s,p)=>s+(+p.fee||0)-projectCost(p),0))+' net</span></div><div class="grid" style="gap:12px">'+ps.map(projectCard).join('')+'</div></section>':''})()+
+  (upcoming.length?'<section class="panel"><div class="panel-head"><h3>Booked, not yet done</h3><span class="note num">'+gbp(upcoming.reduce((s,e)=>s+eventValue(e),0))+' coming</span></div><div class="list">'+upcoming.slice(0,6).map(e=>'<div class="item" style="cursor:pointer" data-act="gotoday" data-v="'+startOfDay(e.start)+'"><span class="sw" style="background:'+c.colour+'"></span><div class="main"><div class="t">'+esc(e.title)+'</div><div class="meta">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+fmtTime(e.start)+'–'+fmtTime(e.end)+' · '+esc(e.type)+'</div></div><div class="end"><span class="num">'+(e.projectId?'<span class="muted">'+esc((S.projects[e.projectId]||{}).title||'project')+'</span>':gbp(eventValue(e)))+'</span></div></div>').join('')+'</div></section>':'')+
   '<section class="panel"><div class="panel-head"><h3>Time logged'+(li?' since '+esc(li.number):'')+'</h3><button class="link" data-act="manual" data-v="'+cid+'">Add time</button></div><div class="list">'+(ents.length?ents.slice(0,30).map(entryRow).join(''):'<div class="empty">No time logged yet.</div>')+'</div></section></div>'+
   '<div class="grid" style="align-content:start"><section class="panel"><h3 style="margin-bottom:14px">Who did the work</h3><div class="bars">'+people+'</div>'+
   (Object.keys(byCat).length?'<hr class="s" style="margin:16px 0"><dl class="kv">'+Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,h])=>'<dt>'+esc(k)+'</dt><dd>'+hrs(h)+'</dd>').join('')+'</dl>':'')+'</section>'+
@@ -930,6 +962,7 @@ function openEntryModal(eid,presetClient){
     '<div class="row"><label class="f">Who<select id="e-person">'+PEOPLE.map(p=>'<option value="'+p.id+'" '+((e?e.person:S.person)===p.id?'selected':'')+'>'+esc(name(p.id))+'</option>').join('')+'</select></label><label class="f">Client<select id="e-client">'+clientOptions(e?e.clientId:(presetClient||S.draft.clientId))+'</select></label></div>'+
     '<div class="row"><label class="f">Work<select id="e-cat">'+catOptions(e?e.category:'Editing')+'</select></label><label class="f">Counts as client work<select id="e-bill"><option value="auto">Default for this type</option><option value="1" '+(e&&e.billable===true?'selected':'')+'>Yes</option><option value="0" '+(e&&e.billable===false?'selected':'')+'>No</option></select></label></div>'+
     '<div class="row"><label class="f">Date<input type="date" id="e-date" value="'+dayKey(st.getTime())+'"></label><label class="f">Start<input type="time" id="e-start" value="'+t(st)+'"></label><label class="f">End<input type="time" id="e-end" value="'+t(en)+'"></label></div>'+
+    '<label class="f">Project (optional)<select id="e-project">'+(()=>{const cid=e?e.clientId:(presetClient||S.draft.clientId||(activeClients()[0]||{}).id);const ps=activeProjects(cid);return '<option value="">None</option>'+ps.map(p=>'<option value="'+p.id+'" '+(e&&e.projectId===p.id?'selected':'')+'>'+esc(p.title)+'</option>').join('')})()+'</select></label>'+
     '<label class="f">Notes<input type="text" id="e-task" value="'+esc(e?e.task:'')+'"></label>'+
     '<div id="e-confirm"></div>'+
     '<div class="acts">'+(e?'<button class="btn ghost small" data-act="askdelentry" data-v="'+eid+'">Delete</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveentry" data-v="'+(eid||'')+'">Save</button></div>'};
@@ -956,16 +989,57 @@ function groupOf(ev){return Object.values(S.events).filter(e=>ev.groupId?e.group
 function evLine(ev,all){
   const v=eventValue(ev);const cost=crewCost(ev);const cl=clashes(ev,all);const inv=ev.invoiceId&&S.invoices[ev.invoiceId];const st=evStatus(ev);
   const money=v?'<b style="font-weight:500">'+gbp(v)+'</b>'+(cost?' · crew '+gbp(cost)+' · <b style="font-weight:500">'+gbp(v-cost)+' net</b>':''):(cost?'crew '+gbp(cost):'');
-  const crew=(ev.crew||[]).length?'<div class="meta note">Crew: '+(ev.crew||[]).map(x=>esc(crewName(x.id))+(x.status==='confirmed'?' ✓':x.status==='declined'?' ✗':' (pencil)')).join(', ')+(ev.callTime?' · call '+esc(ev.callTime):'')+'</div>':'';
+  const pj=ev.projectId&&S.projects[ev.projectId];const crew=(pj?'<div class="meta note">Project: '+esc(pj.title)+' · '+gbp(pj.fee)+(planRemaining(pj).some(x=>x.remaining)?' · '+planRemaining(pj).filter(x=>x.remaining).map(x=>x.remaining+' '+x.type.toLowerCase()).join(', ')+' still to allocate':'')+'</div>':'')+((ev.crew||[]).length?'<div class="meta note">Crew: '+(ev.crew||[]).map(x=>esc(crewName(x.id))+(x.status==='confirmed'?' ✓':x.status==='declined'?' ✗':' (pencil)')).join(', ')+(ev.callTime?' · call '+esc(ev.callTime):'')+'</div>':'');
   return '<div class="ev'+(evVisible(ev)?'':' dim')+'"><span style="background:'+colour(ev.clientId)+'"></span><div class="main"><div>'+esc(ev.title)+(cl?' <span class="pill" style="color:var(--warn);border-color:var(--warn)">Clash</span>':'')+'</div><div class="meta note">'+fmtTime(ev.start)+'–'+fmtTime(ev.end)+' · '+esc(cname(ev.clientId))+' · '+esc((ev.people||[]).map(name).join(' & ')||'Unassigned')+(money?' · '+money:'')+(ev.location?' · '+esc(ev.location):'')+'</div>'+crew+
   '<div class="row" style="gap:14px;margin-top:6px"><button class="link" data-act="sendsheet" data-v="'+ev.id+'">Send</button><button class="link" data-act="ical" data-v="'+ev.id+'">Apple Calendar</button><a class="link" href="'+gcalLink(ev)+'" target="_blank" rel="noopener">Google</a><button class="link" data-act="logevent" data-v="'+ev.id+'">Log as time</button><button class="link" data-act="editevent" data-v="'+ev.id+'">Edit</button></div></div><span style="display:grid;gap:4px;justify-items:end"><span class="pill">'+esc(ev.type)+'</span><span class="pill st-'+st+'">'+STATUS_LABEL[st]+'</span>'+(inv?'<span class="pill paid">'+esc(inv.number)+'</span>':'')+'</span></div>';
 }
 
 /* ===== schedule ===== */
+function monthStats(m0){
+  const m1=addMonths(m0,1);const now=Date.now();
+  const evs=Object.values(S.events).filter(e=>e.status!=='cancelled'&&e.start>=m0&&e.start<m1&&evVisible(e));
+  const days=t=>new Set(evs.filter(e=>e.type===t).map(e=>startOfDay(e.start))).size;
+  let fees=evs.reduce((s,e)=>s+eventValue(e),0);const crew=evs.reduce((s,e)=>s+crewCost(e),0);
+  const pencil=evs.filter(e=>evStatus(e)==='pencil').reduce((s,e)=>s+eventValue(e),0);
+  let projects=0,retainers=0;
+  Object.values(S.projects).forEach(p=>{if(pstatus(p)==='cancelled')return;const a=projectAnchor(p);if(a>=m0&&a<m1){projects+=+p.fee||0}});
+  activeClients().forEach(c=>{const r=rateCard(c);if(r.billing!=='retainer')return;retainerPeriods(c,m1-1).forEach(pr=>{if(pr.start>=m0&&pr.start<m1)retainers+=r.monthlyFee})});
+  const hours=Object.values(S.entries).filter(e=>e.start>=m0&&e.start<m1&&(S.cal.who&&S.cal.who!=='all'?e.person===S.cal.who:true)).reduce((s,e)=>s+entryH(e),0);
+  const invoiced=Object.values(S.invoices).filter(i=>i.date>=m0&&i.date<m1).reduce((s,i)=>s+i.subtotal,0);
+  const gross=fees+projects+retainers;
+  return {m0,m1,evs,bookings:evs.length,shoot:days('Shoot'),edit:days('Edit'),off:days('Unavailable'),fees,projects,retainers,gross,crew,net:gross-crew,pencil,hours,invoiced,past:m1<=now};
+}
+function vYear(){
+  const C=S.cal;const span=C.span||6;const start=startOfMonth(C.cursor);const t0=startOfMonth(Date.now());
+  const months=[];for(let i=0;i<span;i++)months.push(monthStats(addMonths(start,i)));
+  const tot=months.reduce((a,m)=>({bookings:a.bookings+m.bookings,shoot:a.shoot+m.shoot,edit:a.edit+m.edit,gross:a.gross+m.gross,crew:a.crew+m.crew,net:a.net+m.net,pencil:a.pencil+m.pencil,hours:a.hours+m.hours,retainers:a.retainers+m.retainers,projects:a.projects+m.projects,fees:a.fees+m.fees}),{bookings:0,shoot:0,edit:0,gross:0,crew:0,net:0,pencil:0,hours:0,retainers:0,projects:0,fees:0});
+  const maxG=Math.max(1,...months.map(m=>m.gross));
+  const toAlloc=projectsToAllocate().reduce((s,x)=>s+x.rem.reduce((a,r)=>a+r.remaining,0),0);
+  const goal=+S.settings.monthlyGoal||0;
+  const title=months[0].m0===months[months.length-1].m0?new Date(start).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):new Date(start).toLocaleDateString('en-GB',{month:'short',year:'numeric'})+' – '+new Date(months[months.length-1].m0).toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+  const pile='<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h3>'+title+'</h3><span class="note">'+span+' month'+(span===1?'':'s')+(goal?' · goal '+gbp(goal*span):'')+'</span></div>'+
+    '<div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))">'+
+    '<div class="stat"><span class="eyebrow">Gross</span><span class="v">'+gbp(tot.gross)+'</span><span class="s">'+(tot.retainers?gbp(tot.retainers)+' retainers · ':'')+(tot.projects?gbp(tot.projects)+' projects · ':'')+gbp(tot.fees)+' day bookings</span></div>'+
+    '<div class="stat"><span class="eyebrow">Crew</span><span class="v">'+gbp(tot.crew)+'</span></div>'+
+    '<div class="stat"><span class="eyebrow">Net</span><span class="v" style="font-weight:400">'+gbp(tot.net)+'</span>'+(goal?'<span class="s">'+Math.round(tot.gross/(goal*span)*100)+'% of goal</span>':'')+'</div>'+
+    '<div class="stat"><span class="eyebrow">Filming days</span><span class="v">'+tot.shoot+'</span></div>'+
+    '<div class="stat"><span class="eyebrow">Edit days</span><span class="v">'+tot.edit+'</span>'+(toAlloc?'<span class="s" style="color:var(--warn)">'+toAlloc+' project day'+(toAlloc===1?'':'s')+' still to allocate</span>':'')+'</div>'+
+    '<div class="stat"><span class="eyebrow">Pencilled</span><span class="v">'+gbp(tot.pencil)+'</span><span class="s">not yet confirmed</span></div>'+
+    (tot.hours?'<div class="stat"><span class="eyebrow">Hours clocked</span><span class="v">'+hrs(tot.hours)+'</span><span class="s">'+(tot.hours?gbp(tot.net/tot.hours)+'/hr net':'')+'</span></div>':'')+'</div></section>';
+  const cards=months.map(m=>{const d=new Date(m.m0);const g0=startOfWeek(m.m0);const cells=[];for(let i=0;i<42;i++)cells.push(addDays(g0,i));const need=cells.slice(35).some(x=>new Date(x).getMonth()===d.getMonth())?42:35;
+    const byDay={};m.evs.forEach(e=>{const k=startOfDay(e.start);(byDay[k]=byDay[k]||[]).push(e)});
+    const mini='<div class="ymini">'+cells.slice(0,need).map(x=>{const out=new Date(x).getMonth()!==d.getMonth();const de=byDay[x]||[];const tg=dayTags(de);return '<i class="'+(out?'out':'')+(tg.shoot?' shoot':tg.edit?' edit':tg.off?' off':de.length?' other':'')+(tg.pencil&&!tg.shoot&&!tg.edit?' pencil':'')+'" style="'+(de.length&&!out?'--c:'+colour(de[0].clientId):'')+'"></i>'}).join('')+'</div>';
+    return '<button class="ycard'+(m.m0===t0?' now':'')+(m.past?' past':'')+'" data-act="gomonth" data-v="'+m.m0+'"><div class="yh"><b>'+d.toLocaleDateString('en-GB',{month:'long'})+'</b><span class="note">'+d.getFullYear()+'</span></div>'+mini+
+    '<div class="ybar"><i style="width:'+(m.gross/maxG*100)+'%"></i></div>'+
+    '<div class="yfigs"><div><b>'+gbp(m.gross)+'</b><span>gross</span></div><div><b>'+gbp(m.net)+'</b><span>net</span></div><div><b>'+m.shoot+'</b><span>filming</span></div><div><b>'+m.edit+'</b><span>edit</span></div></div>'+
+    '<div class="note">'+m.bookings+' booking'+(m.bookings===1?'':'s')+(m.pencil?' · '+gbp(m.pencil)+' pencilled':'')+(m.retainers?' · '+gbp(m.retainers)+' retainers':'')+(m.past&&m.hours?' · '+hrs(m.hours)+' clocked':'')+(m.invoiced?' · '+gbp(m.invoiced)+' invoiced':'')+'</div></button>'}).join('');
+  return pile+'<div class="ygrid">'+cards+'</div>';
+}
 function vSchedule(){
   const C=S.cal;const all=Object.values(S.events);const t0=startOfDay(Date.now());
   let title,body,from,to;
-  if(C.mode==='month'){
+  if(C.mode==='year'){const span=C.span||6;title='';body=vYear();from=startOfMonth(C.cursor);to=addMonths(from,span)}
+  else if(C.mode==='month'){
     const m0=startOfMonth(C.cursor);const d=new Date(m0);const g0=startOfWeek(m0);
     title=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
     const cells=[];for(let i=0;i<42;i++)cells.push(addDays(g0,i));
@@ -1011,23 +1085,23 @@ function vSchedule(){
   const legend=activeClients().filter(c=>inRange.some(e=>e.clientId===c.id)).map(c=>'<span class="chip"><span class="dot" style="background:'+c.colour+'"></span>'+esc(c.name)+'</span>').join('');
   const who=C.who||'all';
   return '<div class="panel-head"><h1>Schedule</h1><button class="btn small" data-act="newevent">New booking</button></div>'+
-  '<div class="calhead"><h2>'+title+'</h2><div class="nav"><button data-act="calnav" data-v="-1" aria-label="Previous">‹</button><button data-act="calnav" data-v="0">Today</button><button data-act="calnav" data-v="1" aria-label="Next">›</button></div>'+
+  '<div class="calhead">'+(C.mode==='year'?'<div class="seg" style="margin-right:auto">'+[1,3,6,12].map(n=>'<button data-act="calspan" data-v="'+n+'" aria-pressed="'+((C.span||6)===n)+'">'+(n===1?'1 month':n+' months')+'</button>').join('')+'</div>':'<h2>'+title+'</h2>')+'<div class="nav"><button data-act="calnav" data-v="-1" aria-label="Previous">‹</button><button data-act="calnav" data-v="0">Today</button><button data-act="calnav" data-v="1" aria-label="Next">›</button></div>'+
   '<div class="seg">'+[['all','Both']].concat(PEOPLE.map(p=>[p.id,name(p.id)])).map(([k,l])=>'<button data-act="calwho" data-v="'+k+'" aria-pressed="'+(who===k)+'">'+esc(l)+'</button>').join('')+'</div>'+
-  '<div class="seg">'+[['month','Month'],['week','Week'],['list','List']].map(([k,l])=>'<button data-act="calmode" data-v="'+k+'" aria-pressed="'+(C.mode===k)+'">'+l+'</button>').join('')+'</div></div>'+
+  '<div class="seg">'+[['year','Year'],['month','Month'],['week','Week'],['list','List']].map(([k,l])=>'<button data-act="calmode" data-v="'+k+'" aria-pressed="'+(C.mode===k)+'">'+l+'</button>').join('')+'</div></div>'+
   body+
-  '<div class="legend"><span class="num">'+inRange.length+' booking'+(inRange.length===1?'':'s')+' · '+gbp(booked)+' booked'+(crewC?' · '+gbp(crewC)+' crew · '+gbp(booked-crewC)+' net':'')+' · '+perP+'</span>'+legend+'</div>';
+  '<div class="legend">'+(C.mode==='year'?'':'<span class="num">'+inRange.length+' booking'+(inRange.length===1?'':'s')+' · '+gbp(booked)+' booked'+(crewC?' · '+gbp(crewC)+' crew · '+gbp(booked-crewC)+' net':'')+' · '+perP+'</span>')+legend+'</div>';
 }
 
 /* ===== clients and crew ===== */
 function vClients(){
-  if(S.sub==='crew')return vCrew();
+  if(S.sub==='crew')return vCrew();if(S.sub==='projects')return vProjects();
   const cs=activeClients();
   const cards=cs.map(c=>{const u=unbilled(c.id);const li=lastInvoice(c.id);const r=rateCard(c);
     return '<button class="ccard" data-act="openclient" data-v="'+c.id+'"><div class="hd" style="background:'+c.colour+';color:'+contrast(c.colour)+'"><h3>'+esc(c.name)+'</h3>'+(r.billing==='retainer'?'<span class="pill" style="border-color:currentColor;color:inherit">Retainer</span>':'')+'</div>'+
     '<div class="figs"><div><b>'+gbp(u.total)+'</b><span>To invoice</span></div><div><b>'+gbp(annualValue(c)?annualValue(c)+bookedAhead(c.id).total:bookedAhead(c.id).total)+'</b><span>'+(annualValue(c)?'Annual value':'Booked ahead')+'</span></div></div>'+
     '<div class="note">'+hrs(u.hours)+' since last invoice'+(li?' · last invoiced '+fmtDate(li.date,{day:'numeric',month:'short'}):'')+'</div></button>'}).join('');
   const arch=Object.values(S.clients).filter(c=>c.archived);
-  return '<div class="panel-head"><h1>Clients</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="true">Clients</button><button data-act="sub" data-v="crew" aria-pressed="false">Crew</button></div><button class="btn small" data-act="newclient">Add client</button></div></div>'+
+  return '<div class="panel-head"><h1>Clients</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="true">Clients</button><button data-act="sub" data-v="projects" aria-pressed="false">Projects</button><button data-act="sub" data-v="crew" aria-pressed="false">Crew</button></div><button class="btn small" data-act="newclient">Add client</button></div></div>'+
   (cs.length?'<div class="grid g3">'+cards+'</div>':'<div class="panel empty"><b>No clients yet.</b> Add a client with their colour and rates, and every hour you log against them is priced automatically.</div>')+
   (arch.length?'<p class="note" style="margin-top:20px">Archived: '+arch.map(c=>'<button class="link" data-act="openclient" data-v="'+c.id+'">'+esc(c.name)+'</button>').join(', ')+'</p>':'');
 }
@@ -1036,8 +1110,45 @@ function vCrew(){
   const rows=cs.map(c=>{const h=payHistory(c.id);const past=h.filter(x=>!x.future&&x.date>=y0),future=h.filter(x=>x.future);const pr=payRange(c.id);const open=S.crewOpen===c.id;
     return '<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left;font-weight:400" data-act="crewopen" data-v="'+c.id+'">'+esc(c.name)+'</button><div class="note">'+esc(c.role||'')+(c.phone?' · '+esc(c.phone):'')+(c.email?' · '+esc(c.email):'')+'</div></td><td>'+(ratesOf(c).map(r=>'<span class="chip" style="font-size:12px;margin-right:10px">'+gbp(r.amount)+' <span class="muted">'+esc(r.label)+'</span></span>').join('')||'<span class="muted">No rates set</span>')+'</td><td class="r">'+(pr?gbp(pr.min)+(pr.max!==pr.min?'–'+gbp(pr.max):'')+'<div class="note">'+pr.n+' job'+(pr.n===1?'':'s')+', avg '+gbp(pr.avg)+'</div>':'<span class="muted">—</span>')+'</td><td class="r">'+future.length+'<div class="note">'+gbp(future.reduce((s,x)=>s+x.rate,0))+'</div></td><td class="r"><button class="btn ghost small" data-act="editcrew" data-v="'+c.id+'">Edit</button></td></tr>'+
     (open?'<tr><td colspan="5" style="padding:0 0 14px"><div class="panel" style="padding:14px"><div class="panel-head"><h3 class="small" style="font-size:16px">What we have paid '+esc(c.name.split(' ')[0])+'</h3><span class="note">Newest first</span></div>'+(h.length?'<div class="tbl"><table><thead><tr><th>Date</th><th>Job</th><th>Client</th><th class="r">Paid</th></tr></thead><tbody>'+h.slice(0,24).map(x=>'<tr'+(x.future?' style="color:var(--muted)"':'')+'><td>'+fmtDate(x.date,{day:'numeric',month:'short',year:'numeric'})+(x.future?' <span class="pill">ahead</span>':'')+'</td><td>'+esc(x.title)+' <span class="muted">· '+esc(x.type)+'</span></td><td>'+esc(x.client)+'</td><td class="r">'+gbp(x.rate)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="note">No jobs yet.</p>')+(c.notes?'<p class="note" style="margin-top:10px">'+esc(c.notes)+'</p>':'')+'</div></td></tr>':'')}).join('');
-  return '<div class="panel-head"><h1>Crew</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="false">Clients</button><button data-act="sub" data-v="crew" aria-pressed="true">Crew</button></div><button class="btn small" data-act="newcrew">Add crew</button></div></div>'+
+  return '<div class="panel-head"><h1>Crew</h1><div class="row" style="flex:0 1 auto;align-items:center"><div class="seg"><button data-act="sub" data-v="clients" aria-pressed="false">Clients</button><button data-act="sub" data-v="projects" aria-pressed="false">Projects</button><button data-act="sub" data-v="crew" aria-pressed="true">Crew</button></div><button class="btn small" data-act="newcrew">Add crew</button></div></div>'+
   (cs.length?'<section class="panel"><div class="tbl"><table><thead><tr><th>Name</th><th>Rates</th><th class="r">Paid before</th><th class="r">Booked ahead</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" style="margin-top:12px">Tap a name to see every job and what you paid. Rates are starting points; the agreed fee is set on each booking.</p></section>':'<div class="panel empty"><b>No crew yet.</b> Add the freelancers you work with and their rates, then add them to bookings. Every booking then shows what you keep after paying them.</div>');
+}
+function openProjectModal(id,presetClient){
+  const base=id?{...S.projects[id]}:{clientId:presetClient||'',title:'',fee:'',plan:[{type:'Shoot',days:1},{type:'Edit',days:1}],notes:'',status:'active'};
+  const pr={...base,plan:(base.plan||[]).map(x=>({...x}))};if(!pr.plan.length)pr.plan.push({type:'Edit',days:1});
+  S.modal={type:'project',p:pr,html:()=>{const p=S.modal.p;const rem=id?planRemaining(p):[];return '<h2>'+(id?'Edit project':'New project')+'</h2>'+
+    '<div class="row"><label class="f">Client<select id="j-client">'+clientOptions(p.clientId)+'</select></label><label class="f">Project fee, ex VAT (£)<input type="number" id="j-fee" min="0" value="'+(p.fee||'')+'"></label></div>'+
+    '<label class="f">Title<input type="text" id="j-title" value="'+esc(p.title)+'" placeholder="Autumn brand film, Roster edit, Conference highlights"></label>'+
+    '<div><div class="eyebrow" style="margin-bottom:8px">What the fee covers</div><div class="grid" style="gap:8px">'+p.plan.map((x,i)=>'<div class="row" style="flex-wrap:nowrap;align-items:center"><select data-pt="'+i+'" style="flex:2">'+PLAN_TYPES.map(t=>'<option '+(x.type===t?'selected':'')+'>'+(t==='Shoot'?'Filming':t)+'</option>').join('')+'</select><input type="number" data-pd="'+i+'" min="0" step="0.5" value="'+x.days+'" style="flex:1" aria-label="Days"><span class="note" style="flex:0 0 auto">days'+(id&&rem[i]?' · '+rem[i].allocated+' allocated':'')+'</span><button type="button" class="link" data-act="planrm" data-v="'+i+'" style="flex:0 0 auto">✕</button></div>').join('')+'</div><div style="margin-top:8px"><button type="button" class="link" data-act="planadd">Add a line</button></div><p class="note" style="margin-top:8px">Internal plan. The client sees one fee; you see how many days it buys and which are still to allocate.</p></div>'+
+    '<div class="row"><label class="f">Status<select id="j-status"><option value="active" '+(pstatus(p)==='active'?'selected':'')+'>Active</option><option value="complete" '+(pstatus(p)==='complete'?'selected':'')+'>Complete, ready to invoice</option><option value="cancelled" '+(pstatus(p)==='cancelled'?'selected':'')+'>Cancelled</option></select></label><label class="f">Deadline (optional)<input type="date" id="j-due" value="'+(p.due?dayKey(p.due):'')+'"></label></div>'+
+    (p.invoiceId?'<p class="note" style="color:var(--warn)">On invoice '+esc((S.invoices[p.invoiceId]||{}).number||'')+'.</p>':'')+
+    '<label class="f">Notes<textarea id="j-notes" rows="2">'+esc(p.notes||'')+'</textarea></label>'+
+    (()=>{const cands=Object.values(S.events).filter(e=>e.clientId===p.clientId&&e.status!=='cancelled'&&(!e.projectId||e.projectId===id)).sort((a,b)=>a.start-b.start);if(!p.clientId||!cands.length)return '';return '<div><div class="eyebrow" style="margin-bottom:8px">Bookings in this project</div><div class="grid" style="gap:6px;max-height:220px;overflow:auto">'+cands.map(e=>'<label class="chip" style="font-size:13px;align-items:flex-start"><input type="checkbox" data-attach="'+e.id+'" '+(e.projectId===id?'checked':'')+'> <span>'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+esc(e.title)+' · '+esc(e.type)+(e.fee&&!e.projectId?' · '+gbp(e.fee)+' own fee':'')+'</span></label>').join('')+'</div><p class="note" style="margin-top:6px">Ticked bookings count towards this project and lose their own fee (crew costs stay). Untick to detach.</p></div>'})()+
+    '<div class="acts">'+(id?'<button class="btn ghost small" data-act="allocate" data-v="'+id+'">Allocate days</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveproject" data-v="'+(id||'')+'">Save project</button></div>'}};
+  renderModal();
+}
+function readProjectModal(){const p=S.modal.p;const g=id=>{const el=document.getElementById(id);return el?el.value:undefined};
+  if(g('j-title')!==undefined){p.clientId=g('j-client');p.title=g('j-title').trim();p.fee=+g('j-fee')||0;p.status=g('j-status');p.notes=g('j-notes').trim();p.due=g('j-due')?parseLocal(g('j-due'),'00:00'):null}
+  p.plan=p.plan.map((x,i)=>{const t=document.querySelector('[data-pt="'+i+'"]'),d=document.querySelector('[data-pd="'+i+'"]');return {type:t?(t.value==='Filming'?'Shoot':t.value):x.type,days:d?(+d.value||0):x.days}});
+}
+function projectCard(p){
+  const rem=planRemaining(p);const cost=projectCost(p);const h=projectHours(p);const b=projectBookings(p.id);const st=pstatus(p);const c=client(p.clientId);
+  return '<div class="pcard"><div class="pc-head"><div style="min-width:0"><div class="t" style="font-weight:400">'+esc(p.title)+'</div><div class="note">'+esc(cname(p.clientId))+(p.due?' · due '+fmtDate(p.due,{day:'numeric',month:'short'}):'')+(b.length?' · '+fmtDate(b[0].start)+(b.length>1?' – '+fmtDate(b[b.length-1].start):''):'')+'</div></div><span class="pill st-'+(st==='active'?'pencil':st==='complete'?'confirmed':st)+'" style="'+(st==='active'?'color:var(--fg);border-color:var(--line-strong);border-style:solid':'')+'">'+st+'</span></div>'+
+  '<div class="pc-figs"><div><b>'+gbp(p.fee)+'</b><span>Fee</span></div><div><b>'+gbp(cost)+'</b><span>Crew</span></div><div><b>'+gbp((+p.fee||0)-cost)+'</b><span>Net</span></div><div><b>'+(h?hrs(h):'—')+'</b><span>Hours</span></div><div><b>'+(h?gbp(((+p.fee||0)-cost)/h):'—')+'</b><span>Net £/hr</span></div></div>'+
+  '<div class="plan">'+rem.map(x=>'<span class="chip'+(x.remaining?' todo':'')+'"><i class="dot" style="background:'+(c?c.colour:'var(--muted)')+(x.remaining?';opacity:.3':'')+'"></i>'+x.allocated+'/'+x.planned+' '+(x.type==='Shoot'?'filming':x.type.toLowerCase())+(x.remaining?' · '+x.remaining+' to allocate':'')+'</span>').join('')+'</div>'+
+  '<div class="row" style="gap:14px;margin-top:8px">'+(st==='active'&&rem.some(x=>x.remaining)?'<button class="btn small" data-act="allocate" data-v="'+p.id+'">Allocate days</button>':'')+(st==='active'&&!rem.some(x=>x.remaining)&&b.every(e=>e.end<Date.now())?'<button class="btn small" data-act="projcomplete" data-v="'+p.id+'">Mark complete</button>':'')+'<button class="link" data-act="editproject" data-v="'+p.id+'">Edit</button>'+(b.length?'<button class="link" data-act="gotoday" data-v="'+startOfDay(b[0].start)+'">Open in schedule</button>':'')+'</div></div>';
+}
+function allocatePanel(){
+  const list=projectsToAllocate();if(!list.length)return '';
+  return '<section class="panel"><div class="panel-head"><h3>Days to allocate</h3><span class="note">'+list.length+' project'+(list.length===1?'':'s')+'</span></div><div class="list">'+list.map(({p,rem})=>'<div class="item"><span class="sw" style="background:'+colour(p.clientId)+'"></span><div class="main"><div class="t">'+esc(cname(p.clientId))+' <span class="muted">· '+esc(p.title)+'</span></div><div class="meta">'+rem.map(x=>x.remaining+' '+(x.type==='Shoot'?'filming':x.type.toLowerCase())+' day'+(x.remaining===1?'':'s')).join(', ')+(p.due?' · due '+fmtDate(p.due,{day:'numeric',month:'short'}):'')+'</div></div><div class="end"><button class="btn ghost small" data-act="allocate" data-v="'+p.id+'">Allocate</button></div></div>').join('')+'</div></section>';
+}
+function vProjects(){
+  const ps=activeProjects().filter(p=>pstatus(p)!=='invoiced').sort((a,b)=>(pstatus(a)==='active'?0:1)-(pstatus(b)==='active'?0:1)||(a.due||9e15)-(b.due||9e15));
+  const done=Object.values(S.projects).filter(p=>pstatus(p)==='invoiced').sort((a,b)=>(b.completedAt||0)-(a.completedAt||0)).slice(0,10);
+  const seg='<div class="seg"><button data-act="sub" data-v="clients" aria-pressed="false">Clients</button><button data-act="sub" data-v="projects" aria-pressed="true">Projects</button><button data-act="sub" data-v="crew" aria-pressed="false">Crew</button></div>';
+  return '<div class="panel-head"><h1>Projects</h1><div class="row" style="flex:0 1 auto;align-items:center">'+seg+'<button class="btn small" data-act="newproject">New project</button></div></div>'+
+  (ps.length?'<div class="grid g2">'+ps.map(projectCard).join('')+'</div>':'<div class="panel empty"><b>No projects yet.</b> A project is what a client buys: a fee that covers a set of filming and edit days. Create one, then allocate its days in the calendar.</div>')+
+  (done.length?'<h3 style="margin:24px 0 12px">Invoiced</h3><div class="grid g2">'+done.map(projectCard).join('')+'</div>':'');
 }
 function openCrewModal(id){
   const base=id?{...S.crew[id]}:{name:'',role:'',email:'',phone:'',notes:''};
@@ -1073,7 +1184,8 @@ function openEventModal(evid,date,startAt,presetClient){
   const crewSel={};(ev?ev.crew||[]:[]).forEach(x=>crewSel[x.id]=x);
   S.modal={type:'event',evid:evid||null,days:[day0],calMonth:day0,crewSel,html:()=>'<h2>'+(ev?'Edit booking':'New booking')+'</h2>'+
     '<div class="row"><label class="f">Client<select id="v-client">'+clientOptions(ev?ev.clientId:(presetClient||''),true)+'</select></label><label class="f">Type<select id="v-type">'+EVTYPES.map(x=>'<option '+(ev&&ev.type===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
-    '<label class="f">Title <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span><input type="text" id="v-title" value="'+esc(ev?ev.title:'')+'" placeholder="Leave blank to use the client name"></label>'+
+    '<label class="f">Project<select id="v-project">'+projectOptions(ev?ev.clientId:(presetClient||''),ev?ev.projectId:(S.presetProject||''))+'</select></label><p class="note" id="v-projnote" style="margin:-8px 0 0"></p>'+
+    '<label class="f">Title <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span><input type="text" id="v-title" value="'+esc(ev?ev.title:'')+'" placeholder="Leave blank to use the client or project name"></label>'+
     '<div><div class="eyebrow" style="margin-bottom:8px">Who from Quiet Media</div><div class="row" style="align-items:center">'+PEOPLE.map(p=>'<label class="chip"><input type="checkbox" id="v-p-'+p.id+'" '+(ev?((ev.people||[]).includes(p.id)?'checked':''):(p.id===S.person?'checked':''))+'> '+esc(name(p.id))+'</label>').join('')+'</div></div>'+
     '<div id="v-strip">'+miniCal()+'</div><div id="v-availnote"></div>'+
     '<div class="row"><label class="f">Start<input type="time" id="v-start" value="'+(ev?t(ev.start):(startAt||'09:00'))+'"></label><label class="f">End<input type="time" id="v-end" value="'+(ev?t(ev.end):(endAt||'17:00'))+'"></label><label class="f">Crew call time<input type="time" id="v-call" value="'+esc(ev?ev.callTime||'':'')+'"></label></div>'+
@@ -1083,7 +1195,7 @@ function openEventModal(evid,date,startAt,presetClient){
     '<label class="f">Location<input type="text" id="v-loc" value="'+esc(ev?ev.location||'':'')+'"></label>'+
     '<label class="f">Notes <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(shown on call sheets)</span><textarea id="v-notes" rows="2">'+esc(ev?ev.notes||'':'')+'</textarea></label>'+
     '<div id="v-confirm"></div>'+
-    '<div class="acts">'+(ev?'<button class="btn ghost small" data-act="askdelevent" data-v="'+evid+'">Delete</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveevent" data-v="'+(evid||'')+'">Save booking</button></div>'};
+    '<div class="acts">'+(ev?'<button class="btn ghost small" data-act="askdelevent" data-v="'+evid+'">Delete</button>':'')+(ev&&!ev.projectId&&ev.clientId?'<button class="btn ghost small" data-act="toproject" data-v="'+evid+'">Turn into a project</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveevent" data-v="'+(evid||'')+'">Save booking</button></div>'};
   renderModal();
 }
 function crewSection(){
@@ -1103,6 +1215,9 @@ function availNote(){const n=document.getElementById('v-availnote');if(!n)return
   const strip=document.getElementById('v-strip');if(strip)strip.innerHTML=miniCal();
 }
 function feeNote(){const n=document.getElementById('v-feenote');if(!n)return;const g=id=>(document.getElementById(id)||{}).value;const day=S.modal.days[0]||startOfDay(Date.now());let st=parseLocal(dayKey(day),g('v-start')||'09:00'),en=parseLocal(dayKey(day),g('v-end')||'17:00');if(en<=st)en=st+3600e3;const sug=suggestFee({clientId:g('v-client'),type:g('v-type'),start:st,end:en});const f=g('v-fee');
+  const pn=document.getElementById('v-projnote');const psel=document.getElementById('v-project');
+  if(psel&&psel.dataset.client!==g('v-client')){const keep=psel.value;psel.innerHTML=projectOptions(g('v-client'),keep);psel.dataset.client=g('v-client')}
+  if(psel&&psel.value&&S.projects[psel.value]){const pj=S.projects[psel.value];const rem=planRemaining(pj).filter(x=>x.remaining);if(pn)pn.textContent=gbp(pj.fee)+' project fee. '+(rem.length?'Still to allocate: '+rem.map(x=>x.remaining+' '+(x.type==='Shoot'?'filming':x.type.toLowerCase())+' day'+(x.remaining===1?'':'s')).join(', ')+'.':'All planned days allocated.');n.textContent=f===''?'Covered by the project fee. Only type a fee here for extra work outside the project.':'Extra fee on top of the project.';return}else if(pn)pn.textContent='';
   if(g('v-type')==='Unavailable'){n.textContent='Blocks the day out. Not billed, shown as busy on the public availability page.';return}
   const cc=client(g('v-client'));if(cc&&rateCard(cc).billing==='retainer'&&f===''){n.textContent='Covered by '+cc.name+'’s retainer, so no fee. Type one only for extra work outside the agreement.';return}
   n.textContent=f===''?(sug?'Will be set to '+gbp(sug)+' a day from the client’s rates. Type a figure to override.':'No suggested fee for this client and type. Enter one, or leave blank for £0.'):(sug&&+f!==sug?'Rates would suggest '+gbp(sug)+'.':'')}
@@ -1112,8 +1227,9 @@ async function saveEventForm(evid){
   const clientId=g('v-client');const type=g('v-type');const title=(g('v-title').trim())||(clientId?cname(clientId):type);
   const people=PEOPLE.filter(p=>document.getElementById('v-p-'+p.id).checked).map(p=>p.id);
   const crew=Object.values(m.crewSel);const feeRaw=g('v-fee');
-  const base={title,clientId,type,people,crew,callTime:g('v-call'),location:g('v-loc').trim(),notes:g('v-notes').trim(),status:g('v-status')};
-  const mk=(day)=>{let s=parseLocal(dayKey(day),g('v-start')),e=parseLocal(dayKey(day),g('v-end'));if(e<=s)e=s+3600e3;const d={...base,start:s,end:e};d.fee=feeRaw===''?suggestFee(d):Math.max(0,+feeRaw||0);if(d.type==='Unavailable'){d.fee=0;d.clientId=''}return d};
+  const projectId=(document.getElementById('v-project')||{}).value||'';const pj=projectId&&S.projects[projectId];
+  const base={title:(g('v-title').trim())||(pj?pj.title:title),clientId,projectId,type,people,crew,callTime:g('v-call'),location:g('v-loc').trim(),notes:g('v-notes').trim(),status:g('v-status')};
+  const mk=(day)=>{let s=parseLocal(dayKey(day),g('v-start')),e=parseLocal(dayKey(day),g('v-end'));if(e<=s)e=s+3600e3;const d={...base,start:s,end:e};d.fee=projectId?(feeRaw===''?0:Math.max(0,+feeRaw||0)):(feeRaw===''?suggestFee(d):Math.max(0,+feeRaw||0));if(d.type==='Unavailable'){d.fee=0;d.clientId=''}return d};
   const docs=days.map(mk);closeModal();
   if(evid){const old=S.events[evid];const d=docs[0];if(old&&old.invoiceId)d.invoiceId=old.invoiceId;if(old&&old.groupId)d.groupId=old.groupId;if(old&&old.sheetKey)d.sheetKey=old.sheetKey;if(old&&old.pencilSent)d.pencilSent=old.pencilSent;await patch('events',evid,d);S.cal.cursor=d.start;S.cal.sel=startOfDay(d.start);toast('Booking saved');return}
   const groupId=days.length>1?uid():null;
@@ -1201,7 +1317,7 @@ document.addEventListener('click',async ev=>{
     case 'saveclient':{readClientForm();const c=S.modal.c;if(!c.name.trim()){document.getElementById('m-name').focus();return}c.name=c.name.trim();if(!c.created)c.created=Date.now();const id=v||null;closeModal();await put('clients',id||null,stripId(c));toast('Saved '+c.name);break}
     case 'archive':{readClientForm();const c=S.modal.c;closeModal();await patch('clients',v,{archived:!c.archived});break}
     case 'saveentry':{const g=id=>document.getElementById(id).value;const date=g('e-date');let s=parseLocal(date,g('e-start')),e=parseLocal(date,g('e-end'));if(e<=s)e+=864e5;const cat=g('e-cat');const bl=g('e-bill');
-      const data={person:g('e-person'),clientId:g('e-client'),category:cat,task:g('e-task').trim(),start:s,end:e,billable:bl==='auto'?BILLABLE_DEFAULT[cat]!==false:bl==='1'};
+      const data={person:g('e-person'),clientId:g('e-client'),projectId:(document.getElementById('e-project')||{}).value||'',category:cat,task:g('e-task').trim(),start:s,end:e,billable:bl==='auto'?BILLABLE_DEFAULT[cat]!==false:bl==='1'};
       if(v){await patch('entries',v,data)}else{await put('entries',null,{...data,created:Date.now()})}closeModal();toast('Time saved');break}
     case 'askdelentry':confirmBox('e-confirm','Remove this time entry? It will no longer count towards invoices or totals.','delentry',v);break;
     case 'delentry':closeModal();await remove('entries',v);toast('Time entry removed');break;
@@ -1216,6 +1332,20 @@ document.addEventListener('click',async ev=>{
     case 'ical':addToAppleCalendar(S.events[v]);break;
     case 'pubavail':publishAvailability().then(()=>{render();toast(S.avail==='ok'?'Availability published':'Could not publish, see note')});break;
     case 'sub':S.sub=v;render();break;
+    case 'newproject':openProjectModal(null,b.dataset.c||S.client||'');break;
+    case 'editproject':openProjectModal(v);break;
+    case 'saveproject':{readProjectModal();const p={...S.modal.p};p.plan=p.plan.filter(x=>x.days>0);if(!p.title){document.getElementById('j-title').focus();return}if(!p.clientId){document.getElementById('j-client').focus();return}if(!p.created)p.created=Date.now();if(p.status==='complete'&&!p.completedAt)p.completedAt=Date.now();
+      const att={};document.querySelectorAll('[data-attach]').forEach(cb=>att[cb.dataset.attach]=cb.checked);closeModal();const pid=await put('projects',v||null,stripId(p));
+      for(const [eid,on] of Object.entries(att)){const e=S.events[eid];if(!e)continue;if(on&&e.projectId!==pid)await patch('events',eid,{projectId:pid,fee:0});else if(!on&&e.projectId===pid)await patch('events',eid,{projectId:''})}
+      toast('Saved '+p.title);break}
+    case 'toproject':{const ev=S.events[v];if(!ev)return;const grp=groupOf(ev);const plan={};grp.forEach(e=>{const k=e.type==='Shoot'?'Shoot':e.type==='Edit'?'Edit':e.type==='Meeting'?'Meeting':'Other';plan[k]=(plan[k]||0)+1});const fee=grp.reduce((s,e)=>s+eventValue(e),0);
+      const pj={clientId:ev.clientId,title:ev.title,fee,plan:Object.entries(plan).map(([type,days])=>({type,days})),status:'active',created:Date.now()};closeModal();const pid=await put('projects',null,pj);
+      for(const e of grp){await patch('events',e.id,{projectId:pid,fee:0})}
+      toast('Project created from '+grp.length+' booking'+(grp.length===1?'':'s')+'. Fee '+gbp(fee)+' moved to the project.');openProjectModal(pid);break}
+    case 'planadd':readProjectModal();S.modal.p.plan.push({type:'Edit',days:1});renderModal();break;
+    case 'planrm':readProjectModal();S.modal.p.plan.splice(Number(v),1);if(!S.modal.p.plan.length)S.modal.p.plan.push({type:'Edit',days:1});renderModal();break;
+    case 'projcomplete':await patch('projects',v,{status:'complete',completedAt:Date.now()});toast('Project complete. It is now ready to invoice.');break;
+    case 'allocate':{const p=S.projects[v];if(S.modal&&S.modal.type==='project'){readProjectModal();const pp={...S.modal.p};if(pp.title&&pp.clientId){if(!pp.created)pp.created=Date.now();await put('projects',v,stripId(pp))}}closeModal();S.presetProject=v;openEventModal(null,null,null,p.clientId);const rem=planRemaining(p).filter(x=>x.remaining);if(rem.length){const t=document.getElementById('v-type');if(t)t.value=rem[0].type}S.presetProject=null;feeNote();break}
     case 'newcrew':openCrewModal();break;
     case 'editcrew':openCrewModal(v);break;
     case 'savecrew':{readCrewModal();const c={...S.modal.c};c.rates=c.rates.filter(r=>r.label&&+r.amount>0);c.dayRate=c.rates.length?c.rates[0].amount:0;delete c.halfRate;if(!c.name){document.getElementById('w-name').focus();return}closeModal();await put('crew',v||null,stripId(c));toast('Saved '+c.name);break}
@@ -1236,7 +1366,9 @@ document.addEventListener('click',async ev=>{
     case 'newtoken':saveCfg({...(cfg||{}),token:''});KEY=null;S.locked=true;render();break;
     case 'signout':if(!confirmed('signout')){toast('Press again to confirm removing all data from this device');break}signOut();break;
     case 'importpick':document.getElementById('importFile').click();break;
-    case 'calnav':{const C=S.cal;if(v==='0'){C.cursor=Date.now();C.sel=startOfDay(Date.now())}else{const n=Number(v);C.cursor=C.mode==='month'?addMonths(C.cursor,n):C.mode==='week'?addDays(C.cursor,n*7):addDays(C.cursor,n*28);if(C.mode==='month')C.sel=null}render();break}
+    case 'calnav':{const C=S.cal;if(v==='0'){C.cursor=Date.now();C.sel=startOfDay(Date.now())}else{const n=Number(v);C.cursor=C.mode==='month'?addMonths(C.cursor,n):C.mode==='year'?addMonths(C.cursor,n*(C.span||6)):C.mode==='week'?addDays(C.cursor,n*7):addDays(C.cursor,n*28);if(C.mode==='month')C.sel=null}render();break}
+    case 'calspan':S.cal.span=Number(v);render();break;
+    case 'gomonth':S.cal.mode='month';S.cal.cursor=Number(v);S.cal.sel=null;try{localStorage.setItem('qm-calmode','month')}catch(e){}render();window.scrollTo(0,0);break;
     case 'calmode':S.cal.mode=v;try{localStorage.setItem('qm-calmode',v)}catch(e){}render();break;
     case 'gotoday':S.view='schedule';S.cal.cursor=Number(v);S.cal.sel=Number(v);render();window.scrollTo(0,0);break;
     case 'selday':S.cal.sel=Number(v);render();break;
@@ -1274,7 +1406,7 @@ document.addEventListener('submit',async ev=>{if(ev.target.id!=='lockForm')retur
 });
 document.addEventListener('change',ev=>{if(ev.target.id==='importFile'&&ev.target.files[0])importBackup(ev.target.files[0])});
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='d-task'){ev.preventDefault();startTimer()}});
-document.addEventListener('input',ev=>{const t=ev.target;if(t.dataset.draft)S.draft[t.dataset.draft]=t.value;if(S.modal&&S.modal.type==='event'){feeNote();availNote()}});
+document.addEventListener('input',ev=>{const t=ev.target;if(t.dataset.draft){S.draft[t.dataset.draft]=t.value;if(t.dataset.draft==='clientId'){S.draft.projectId='';render()}}if(S.modal&&S.modal.type==='event'){feeNote();availNote()}});
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.dataset&&t.dataset.crew!==undefined){const r=document.querySelector('[data-crewrate="'+t.dataset.crew+'"]');if(r)r.disabled=!t.checked;readCrewForm();return}
   if(t.dataset&&t.dataset.act==='crewstatus'){const ev2=S.events[t.dataset.e];const crew=(ev2.crew||[]).map(x=>x.id===t.dataset.c?{...x,status:t.value}:x);for(const e of groupOf(ev2)){await patch('events',e.id,{crew:(e.crew||[]).map(x=>x.id===t.dataset.c?{...x,status:t.value}:x)})}return}
