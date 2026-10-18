@@ -260,6 +260,9 @@ tfoot td{border-bottom:0;font-weight:400}
 .ad small{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.ad b{font-weight:300;font-size:15px;font-variant-numeric:tabular-nums}
 .ad span{display:flex;gap:3px}.ad span i{width:7px;height:7px;display:block}.ad span i.free{background:none;border:1px solid var(--line-strong)}
 .ad.we{opacity:.5}.ad.sel{border-color:var(--fg)}.ad:hover{border-color:var(--line-strong)}
+.rbar{height:10px;background:var(--line);position:relative}.rbar i{display:block;height:100%;max-width:100%}
+.swatches input[type=color]{width:28px;height:28px;padding:0;border:1px solid var(--line-strong);background:none;cursor:pointer}
+.swatches input[type=color]::-webkit-color-swatch-wrapper{padding:2px}.swatches input[type=color]::-webkit-color-swatch{border:0}
 .lock{max-width:560px;margin:40px auto;padding:0 4px}
 /* modal */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:grid;place-items:center;padding:16px}
@@ -519,7 +522,7 @@ async function importBackup(file){
 }
 
 /* ---------- valuation ---------- */
-function rateCard(c){return {billing:c.billing||'card',shortRate:+c.shortRate||0,halfDay:+c.halfDay||0,fullDay:+c.fullDay||0,editDay:+c.editDay||0,editHours:+c.editHours||8,hourlyRate:+c.hourlyRate||0,monthlyFee:+c.monthlyFee||0}}
+function rateCard(c){return {billing:c.billing||'card',shortRate:+c.shortRate||0,halfDay:+c.halfDay||0,fullDay:+c.fullDay||0,editDay:+c.editDay||0,editHours:+c.editHours||8,hourlyRate:+c.hourlyRate||0,monthlyFee:+c.monthlyFee||0,retainerDays:+c.retainerDays||0,retainerDayHours:+c.retainerDayHours||8,retainerStart:c.retainerStart||''}}
 function filmBand(h,r){if(h<=0)return null;if(h<=2)return['up to 2 hrs',r.shortRate];if(h<=4)return['half day',r.halfDay];return['full day',r.fullDay]}
 /* The fee lives on the booking. The rate card only SUGGESTS a fee when a booking is created; once saved, the fee is fixed. */
 function suggestFee(ev){
@@ -535,21 +538,42 @@ const linesTotal=ls=>ls.reduce((s,l)=>s+l.qty*l.unit,0);
 /* Bookings that have happened, carry a fee, and are not yet on an invoice */
 function billableBookings(cid){const now=Date.now();return Object.values(S.events).filter(e=>e.clientId===cid&&!e.invoiceId&&e.status!=='cancelled'&&e.start<=now&&eventValue(e)>0).sort((a,b)=>a.start-b.start)}
 function bookingLine(e){return {desc:e.title+' ('+fmtDate(e.start,{day:'numeric',month:'short'})+(e.type?', '+e.type.toLowerCase():'')+')',qty:1,unit:eventValue(e),eventId:e.id}}
+/* Retainer months: 'YYYY-MM' keys from the retainer start month to the current month */
+const monthKey=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
+const monthLabel=k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'})};
+const monthRange=k=>{const [y,m]=k.split('-').map(Number);return [new Date(y,m-1,1).getTime(),new Date(y,m,1).getTime()]};
+function retainerMonths(c,upto){
+  const r=rateCard(c);if(r.billing!=='retainer')return [];
+  let start=r.retainerStart||monthKey(c.created||Date.now());const end=monthKey(upto||Date.now());const out=[];
+  let [y,m]=start.split('-').map(Number);let guard=0;
+  while(guard++<240){const k=y+'-'+pad(m);if(k>end)break;out.push(k);m++;if(m>12){m=1;y++}}
+  return out;
+}
+function retainerDelivery(c,k){
+  const r=rateCard(c);const [a,b]=monthRange(k);
+  const es=Object.values(S.entries).filter(e=>e.clientId===c.id&&e.start>=a&&e.start<b);
+  const hours=es.reduce((s,e)=>s+entryH(e),0);const promised=r.retainerDays*r.retainerDayHours;
+  const byPerson={},byCat={};es.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e);byCat[e.category]=(byCat[e.category]||0)+entryH(e)});
+  return {key:k,hours,promised,days:r.retainerDayHours?hours/r.retainerDayHours:0,pct:promised?hours/promised*100:0,byPerson,byCat,fee:r.monthlyFee};
+}
 function unbilled(cid){
   const c=client(cid);const li=lastInvoice(cid);const since=li?li.date:0;
   const bookings=billableBookings(cid);
   const lines=bookings.map(bookingLine);
+  const r=rateCard(c);const retMonths=r.billing==='retainer'&&r.monthlyFee?retainerMonths(c).filter(k=>!(c.retainerInvoiced||{})[k]):[];
+  retMonths.forEach(k=>lines.push({desc:'Retainer, '+monthLabel(k),qty:1,unit:r.monthlyFee,month:k}));
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=since);
   const done=es.filter(e=>e.end);
   const hours=done.reduce((s,e)=>s+entryH(e),0);
   const billH=done.filter(e=>e.billable!==false).reduce((s,e)=>s+entryH(e),0);
   const byPerson={};done.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e)});
-  return {bookings,entries:es,done,lines,total:linesTotal(lines),hours,billH,byPerson,since};
+  return {bookings,retMonths,entries:es,done,lines,total:linesTotal(lines),hours,billH,byPerson,since};
 }
 /* Client value over a period: fees for bookings in the period vs hours logged in the period */
 function clientValue(cid,from,to){
   const evs=Object.values(S.events).filter(e=>e.clientId===cid&&e.status!=='cancelled'&&e.start>=from&&e.start<to);
-  const fees=evs.reduce((s,e)=>s+eventValue(e),0);
+  let fees=evs.reduce((s,e)=>s+eventValue(e),0);
+  const c=client(cid);if(c&&rateCard(c).billing==='retainer'){fees+=retainerMonths(c,to-1).filter(k=>monthRange(k)[0]>=startOfMonth(from)).length*rateCard(c).monthlyFee}
   const es=Object.values(S.entries).filter(e=>e.clientId===cid&&e.start>=from&&e.start<to);
   const hours=es.reduce((s,e)=>s+entryH(e),0);
   const byPerson={};es.forEach(e=>{byPerson[e.person]=(byPerson[e.person]||0)+entryH(e)});
@@ -573,18 +597,20 @@ async function stopTimer(p){const e=running(p);if(!e)return;await patch('entries
 
 async function createInvoice(cid){
   const c=client(cid);const u=unbilled(cid);
-  if(!u.bookings.length)return;
+  if(!u.lines.length)return;
   const num=(S.settings.prefix||'')+(S.settings.nextInvoice||1001);
   const sub=u.total;const vat=c.vat===false?0:sub*(+S.settings.vatRate||0)/100;
-  const from=Math.min(...u.bookings.map(e=>e.start));const to=Math.max(...u.bookings.map(e=>e.end));
-  const id=await put('invoices',null,{clientId:cid,number:num,date:Date.now(),from,to,lines:u.lines,subtotal:sub,vat,total:sub+vat,hours:u.hours,status:'draft',eventIds:u.bookings.map(e=>e.id)});
+  const starts=u.bookings.map(e=>e.start).concat(u.retMonths.map(k=>monthRange(k)[0]));const ends=u.bookings.map(e=>e.end).concat(u.retMonths.map(k=>monthRange(k)[1]-1));const from=Math.min(...starts);const to=Math.max(...ends);
+  const id=await put('invoices',null,{clientId:cid,number:num,date:Date.now(),from,to,lines:u.lines,subtotal:sub,vat,total:sub+vat,hours:u.hours,status:'draft',eventIds:u.bookings.map(e=>e.id),retMonths:u.retMonths});
   await saveSettings({nextInvoice:(+S.settings.nextInvoice||1001)+1});
   for(const e of u.bookings){await patch('events',e.id,{invoiceId:id})}
-  toast('Invoice '+num+' created from '+u.bookings.length+' booking'+(u.bookings.length===1?'':'s')+'.');
+  if(u.retMonths.length){const ri={...(c.retainerInvoiced||{})};u.retMonths.forEach(k=>ri[k]=id);await patch('clients',cid,{retainerInvoiced:ri})}
+  toast('Invoice '+num+' created with '+u.lines.length+' line'+(u.lines.length===1?'':'s')+'.');
 }
 async function undoInvoice(iid){
   const inv=S.invoices[iid];if(!inv)return;
   for(const eid of (inv.eventIds||[])){if(S.events[eid])await patch('events',eid,{invoiceId:null})}
+  const c=client(inv.clientId);if(c&&(inv.retMonths||[]).length){const ri={...(c.retainerInvoiced||{})};inv.retMonths.forEach(k=>delete ri[k]);await patch('clients',inv.clientId,{retainerInvoiced:ri})}
   await remove('invoices',iid);S.modal=null;renderModal();toast('Invoice removed. Its bookings are back in "to invoice".');
 }
 function xeroCSV(invs){
@@ -683,8 +709,8 @@ function vToday(){
   const list=todays.length?todays.map(entryRow).join(''):'<div class="empty">Nothing logged today yet. Clock in above, or add time you have already done.</div>';
   const up=Object.values(S.events).filter(e=>e.end>=now).sort((a,b)=>a.start-b.start).slice(0,5);
   const upl=up.length?up.map(e=>'<div class="item" style="cursor:pointer" data-act="gotoday" data-v="'+startOfDay(e.start)+'"><span class="sw" style="background:'+colour(e.clientId)+'"></span><div class="main"><div class="t">'+esc(e.title)+'</div><div class="meta">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+fmtTime(e.start)+'–'+fmtTime(e.end)+' · '+esc(cname(e.clientId))+'</div></div><div class="end"><span class="pill">'+esc(e.type)+'</span></div></div>').join(''):'<div class="empty">No upcoming work booked. <button class="link" data-act="newevent">Schedule something</button></div>';
-  const toInv=activeClients().reduce((s,c)=>s+unbilled(c.id).total,0);const nToInv=activeClients().reduce((s,c)=>s+unbilled(c.id).bookings.length,0);
-  return '<div class="panel-head"><h1>'+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</h1><button class="eyebrow num link" style="text-decoration:none" data-act="nav" data-v="invoicing">'+gbp(toInv)+' to invoice · '+nToInv+' booking'+(nToInv===1?'':'s')+'</button></div>'+
+  const toInv=activeClients().reduce((s,c)=>s+unbilled(c.id).total,0);const nToInv=activeClients().reduce((s,c)=>s+unbilled(c.id).lines.length,0);
+  return '<div class="panel-head"><h1>'+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</h1><button class="eyebrow num link" style="text-decoration:none" data-act="nav" data-v="invoicing">'+gbp(toInv)+' to invoice · '+nToInv+' line'+(nToInv===1?'':'s')+'</button></div>'+
   '<div class="grid g2">'+cards+'</div>'+
   '<div class="grid g2" style="margin-top:16px"><section class="panel"><div class="panel-head"><h3>Logged today</h3><button class="link" data-act="manual">Add time</button></div><div class="list">'+list+'</div></section>'+
   '<section class="panel"><div class="panel-head"><h3>Coming up</h3><button class="link" data-act="nav" data-v="schedule">Schedule</button></div><div class="list">'+upl+'</div></section></div>';
@@ -767,6 +793,19 @@ function vClients(){
   (cs.length?'<div class="grid g3">'+cards+'</div>':'<div class="panel empty"><b>No clients yet.</b> Add a client with their colour and rates, and every hour you log against them is priced automatically.</div>')+
   (arch.length?'<p class="note" style="margin-top:20px">Archived: '+arch.map(c=>'<button class="link" data-act="openclient" data-v="'+c.id+'">'+esc(c.name)+'</button>').join(', ')+'</p>':'');
 }
+function retainerPanel(c){
+  const r=rateCard(c);const months=retainerMonths(c).slice(-6).reverse();if(!months.length)return '';
+  const cur=retainerDelivery(c,months[0]);const maxP=Math.max(1,...Object.values(cur.byPerson));
+  const bar=(d)=>{const over=d.hours>d.promised&&d.promised;const w=d.promised?Math.min(100,d.hours/d.promised*100):0;return '<div class="rbar"><i style="width:'+w+'%;background:'+(over?'var(--warn)':c.colour)+'"></i></div>'};
+  const status=!cur.promised?'Set promised days in the client\'s rates to track delivery.':cur.pct<60?'Under-delivering so far this month. Room to add value.':cur.pct<=110?'On track.':'Over-delivering. Worth a conversation if it keeps happening.';
+  return '<section class="panel"><div class="panel-head"><h3>Retainer, '+monthLabel(cur.key)+'</h3><span class="eyebrow num">'+gbp(r.monthlyFee)+' / month</span></div>'+
+  '<div class="grid g3" style="margin-bottom:14px"><div class="stat"><span class="eyebrow">Promised</span><span class="v">'+r.retainerDays+'<span class="muted" style="font-size:16px"> days</span></span><span class="s">'+hrs(cur.promised)+' at '+r.retainerDayHours+'h a day</span></div><div class="stat"><span class="eyebrow">Delivered</span><span class="v">'+hdec(cur.days).replace(/\.00$/,'')+'<span class="muted" style="font-size:16px"> days</span></span><span class="s">'+hrs(cur.hours)+' clocked</span></div><div class="stat"><span class="eyebrow">Effective rate</span><span class="v">'+(cur.hours?gbp(r.monthlyFee/cur.hours):'—')+'<span class="muted" style="font-size:16px">/hr</span></span><span class="s">'+(cur.promised?Math.round(cur.pct)+'% of promised':'')+'</span></div></div>'+
+  bar(cur)+'<p class="note" style="margin:8px 0 14px">'+status+'</p>'+
+  '<div class="bars">'+PEOPLE.map(p=>{const h=cur.byPerson[p.id]||0;return '<div class="bar"><span class="lab">'+esc(name(p.id))+'</span><span class="track"><i style="width:'+(h/maxP*100)+'%;background:'+c.colour+'"></i></span><span class="val">'+hrs(h)+'</span></div>'}).join('')+'</div>'+
+  (Object.keys(cur.byCat).length?'<dl class="kv" style="margin-top:12px">'+Object.entries(cur.byCat).sort((a,b)=>b[1]-a[1]).map(([k,h])=>'<dt>'+esc(k)+'</dt><dd>'+hrs(h)+'</dd>').join('')+'</dl>':'')+
+  (months.length>1?'<hr class="s" style="margin:16px 0"><div class="tbl"><table><thead><tr><th>Month</th><th class="r">Promised</th><th class="r">Delivered</th><th class="r">%</th><th class="r">£/hr</th></tr></thead><tbody>'+months.slice(1).map(k=>{const d=retainerDelivery(c,k);return '<tr><td>'+monthLabel(k)+'</td><td class="r">'+hrs(d.promised)+'</td><td class="r">'+hrs(d.hours)+'</td><td class="r"'+(d.promised&&d.pct>110?' style="color:var(--warn)"':'')+'>'+(d.promised?Math.round(d.pct)+'%':'—')+'</td><td class="r">'+(d.hours?gbp(d.fee/d.hours):'—')+'</td></tr>'}).join('')+'</tbody></table></div>':'')+
+  '</section>';
+}
 function vClient(cid){
   const c=client(cid);const u=unbilled(cid);const r=rateCard(c);
   const invs=Object.values(S.invoices).filter(i=>i.clientId===cid).sort((a,b)=>b.date-a.date);
@@ -774,34 +813,34 @@ function vClient(cid){
   const byCat={};u.done.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+entryH(e)});
   const maxP=Math.max(1,...Object.values(u.byPerson));
   const people=PEOPLE.map(p=>{const h=u.byPerson[p.id]||0;return '<div class="bar"><span class="lab">'+esc(name(p.id))+'</span><span class="track"><i style="width:'+(h/maxP*100)+'%;background:'+c.colour+'"></i></span><span class="val">'+hrs(h)+'</span></div>'}).join('');
-  const lines=u.bookings.length?'<div class="tbl"><table><thead><tr><th>Booking</th><th class="r">Fee</th></tr></thead><tbody>'+u.bookings.map(e=>'<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left" data-act="editevent" data-v="'+e.id+'">'+esc(e.title)+'</button><div class="note">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+esc(e.type)+' · '+esc((e.people||[]).map(name).join(' & '))+'</div></td><td class="r">'+gbp2(eventValue(e))+'</td></tr>').join('')+'</tbody><tfoot><tr><td>Subtotal, ex VAT</td><td class="r">'+gbp2(u.total)+'</td></tr></tfoot></table></div>':'<div class="empty">No completed bookings waiting to be invoiced. Future bookings appear here once their date has passed.</div>';
+  const lines=u.lines.length?'<div class="tbl"><table><thead><tr><th>Line</th><th class="r">Fee</th></tr></thead><tbody>'+u.bookings.map(e=>'<tr><td><button class="link" style="color:var(--fg);text-decoration:none;text-align:left" data-act="editevent" data-v="'+e.id+'">'+esc(e.title)+'</button><div class="note">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+esc(e.type)+' · '+esc((e.people||[]).map(name).join(' & '))+'</div></td><td class="r">'+gbp2(eventValue(e))+'</td></tr>').join('')+u.retMonths.map(k=>'<tr><td>Retainer, '+monthLabel(k)+'<div class="note">Monthly fee</div></td><td class="r">'+gbp2(r.monthlyFee)+'</td></tr>').join('')+'</tbody><tfoot><tr><td>Subtotal, ex VAT</td><td class="r">'+gbp2(u.total)+'</td></tr></tfoot></table></div>':'<div class="empty">Nothing waiting to be invoiced.'+(r.billing==='retainer'?' The next retainer month appears here on the 1st.':' Future bookings appear here once their date has passed.')+'</div>';
   const y0=new Date(new Date().getFullYear(),0,1).getTime();const cv=clientValue(cid,y0,Date.now()+1);
   const ents=u.entries.sort((a,b)=>b.start-a.start);
   const upcoming=Object.values(S.events).filter(e=>e.clientId===cid&&e.start>Date.now()&&e.status!=='cancelled').sort((a,b)=>a.start-b.start);
   return '<button class="link back" data-act="closeclient">← All clients</button>'+
-  '<div class="panel-head"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="dot" style="width:16px;height:16px;background:'+c.colour+'"></span><h1>'+esc(c.name)+'</h1></div><div class="row" style="flex:0 1 auto"><button class="btn ghost small" data-act="editclient" data-v="'+cid+'">Edit client &amp; rates</button><button class="btn ghost small" data-act="newevent" data-c="'+cid+'">Book work</button><button class="btn small" data-act="invoice" data-v="'+cid+'" '+(u.bookings.length&&'')+'>Create invoice</button></div></div>'+
-  '<div class="grid g3" style="margin-bottom:16px"><div class="panel stat"><span class="eyebrow">To invoice</span><span class="v">'+gbp2(u.total)+'</span><span class="s">'+u.bookings.length+' completed booking'+(u.bookings.length===1?'':'s')+(c.vat===false?' · no VAT':' · + '+gbp2(u.total*(+S.settings.vatRate||0)/100)+' VAT')+'</span></div>'+
+  '<div class="panel-head"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="dot" style="width:16px;height:16px;background:'+c.colour+'"></span><h1>'+esc(c.name)+'</h1></div><div class="row" style="flex:0 1 auto"><button class="btn ghost small" data-act="editclient" data-v="'+cid+'">Edit client &amp; rates</button><button class="btn ghost small" data-act="newevent" data-c="'+cid+'">Book work</button><button class="btn small" data-act="invoice" data-v="'+cid+'" '+(u.lines.length?'':'disabled')+'>Create invoice</button></div></div>'+
+  '<div class="grid g3" style="margin-bottom:16px"><div class="panel stat"><span class="eyebrow">To invoice</span><span class="v">'+gbp2(u.total)+'</span><span class="s">'+u.lines.length+' line'+(u.lines.length===1?'':'s')+(c.vat===false?' · no VAT':' · + '+gbp2(u.total*(+S.settings.vatRate||0)/100)+' VAT')+'</span></div>'+
   '<div class="panel stat"><span class="eyebrow">Time since '+(li?esc(li.number)+', '+fmtDate(li.date):'the start')+'</span><span class="v">'+hrs(u.hours)+'</span><span class="s">'+hrs(u.hours-u.billH)+' of it on admin, meetings and travel</span></div>'+
   '<div class="panel stat"><span class="eyebrow">Value this year</span><span class="v">'+(cv.hours?gbp(cv.rate):'—')+'<span class="muted" style="font-size:16px">/hr</span></span><span class="s">'+gbp(cv.fees)+' in fees across '+hrs(cv.hours)+' worked</span></div></div>'+
-  '<div class="split"><div class="grid" style="align-content:start"><section class="panel"><div class="panel-head"><h3>Ready to invoice</h3><span class="note">Fees are fixed when the work is booked.</span></div>'+lines+'</section>'+
+  '<div class="split"><div class="grid" style="align-content:start">'+(r.billing==='retainer'?retainerPanel(c):'')+'<section class="panel"><div class="panel-head"><h3>Ready to invoice</h3><span class="note">Fees are fixed when the work is booked.</span></div>'+lines+'</section>'+
   (upcoming.length?'<section class="panel"><div class="panel-head"><h3>Booked, not yet done</h3><span class="note num">'+gbp(upcoming.reduce((s,e)=>s+eventValue(e),0))+' coming</span></div><div class="list">'+upcoming.slice(0,6).map(e=>'<div class="item" style="cursor:pointer" data-act="gotoday" data-v="'+startOfDay(e.start)+'"><span class="sw" style="background:'+c.colour+'"></span><div class="main"><div class="t">'+esc(e.title)+'</div><div class="meta">'+fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})+' · '+fmtTime(e.start)+'–'+fmtTime(e.end)+' · '+esc(e.type)+'</div></div><div class="end"><span class="num">'+gbp(eventValue(e))+'</span></div></div>').join('')+'</div></section>':'')+
   '<section class="panel"><div class="panel-head"><h3>Time logged'+(li?' since '+esc(li.number):'')+'</h3><button class="link" data-act="manual" data-v="'+cid+'">Add time</button></div><div class="list">'+(ents.length?ents.slice(0,30).map(entryRow).join(''):'<div class="empty">No time logged yet.</div>')+'</div></section></div>'+
   '<div class="grid" style="align-content:start"><section class="panel"><h3 style="margin-bottom:14px">Who did the work</h3><div class="bars">'+people+'</div>'+
   (Object.keys(byCat).length?'<hr class="s" style="margin:16px 0"><dl class="kv">'+Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,h])=>'<dt>'+esc(k)+'</dt><dd>'+hrs(h)+'</dd>').join('')+'</dl>':'')+'</section>'+
-  '<section class="panel"><h3 style="margin-bottom:12px">Suggested fees</h3><p class="note" style="margin:0 0 10px">Used to pre-fill a fee when you book. Change the fee on any booking.</p><dl class="kv">'+(r.billing==='retainer'?'<dt>Monthly retainer</dt><dd>'+gbp2(r.monthlyFee)+'</dd>':r.billing==='hourly'?'<dt>Hourly</dt><dd>'+gbp2(r.hourlyRate)+'</dd>':'<dt>Filming up to 2 hrs</dt><dd>'+gbp(r.shortRate)+'</dd><dt>Half day, 3–4 hrs</dt><dd>'+gbp(r.halfDay)+'</dd><dt>Full day, 4+ hrs</dt><dd>'+gbp(r.fullDay)+'</dd><dt>Edit day</dt><dd>'+gbp(r.editDay)+'</dd>')+'</dl>'+(c.notes?'<p class="note" style="margin-top:12px">'+esc(c.notes)+'</p>':'')+'</section>'+
+  '<section class="panel"><h3 style="margin-bottom:12px">Suggested fees</h3><p class="note" style="margin:0 0 10px">Used to pre-fill a fee when you book. Change the fee on any booking.</p><dl class="kv">'+(r.billing==='retainer'?'<dt>Monthly retainer</dt><dd>'+gbp2(r.monthlyFee)+'</dd><dt>Promised</dt><dd>'+r.retainerDays+' days × '+r.retainerDayHours+'h</dd><dt>Since</dt><dd>'+(r.retainerStart?monthLabel(r.retainerStart):'client added')+'</dd>':r.billing==='hourly'?'<dt>Hourly</dt><dd>'+gbp2(r.hourlyRate)+'</dd>':'<dt>Filming up to 2 hrs</dt><dd>'+gbp(r.shortRate)+'</dd><dt>Half day, 3–4 hrs</dt><dd>'+gbp(r.halfDay)+'</dd><dt>Full day, 4+ hrs</dt><dd>'+gbp(r.fullDay)+'</dd><dt>Edit day</dt><dd>'+gbp(r.editDay)+'</dd>')+'</dl>'+(c.notes?'<p class="note" style="margin-top:12px">'+esc(c.notes)+'</p>':'')+'</section>'+
   '<section class="panel"><div class="panel-head"><h3>Invoices</h3>'+(invs.length?'<button class="link" data-act="xero" data-v="'+cid+'">Export for Xero</button>':'')+'</div><div class="list">'+(invs.length?invs.map(invRow).join(''):'<div class="empty">No invoices yet.</div>')+'</div></section></div></div>';
 }
 function invRow(i){return '<div class="item"><span class="sw" style="background:'+colour(i.clientId)+'"></span><div class="main"><div class="t">'+esc(i.number)+' <span class="muted">· '+esc(cname(i.clientId))+'</span></div><div class="meta">'+fmtDate(i.date,{day:'numeric',month:'short',year:'numeric'})+' · '+(i.lines||[]).length+' booking'+((i.lines||[]).length===1?'':'s')+'</div></div><div class="end"><span class="num">'+gbp2(i.total)+'</span><button class="pill '+i.status+'" data-act="openinvoice" data-v="'+i.id+'" style="background:none;cursor:pointer">'+i.status+'</button></div></div>'}
 
 function vInvoicing(){
-  const cs=activeClients().map(c=>({c,u:unbilled(c.id)})).filter(x=>x.u.total>0).sort((a,b)=>b.u.total-a.u.total);
+  const cs=activeClients().map(c=>({c,u:unbilled(c.id)})).filter(x=>x.u.lines.length>0).sort((a,b)=>b.u.total-a.u.total);
   const total=cs.reduce((s,x)=>s+x.u.total,0);const max=Math.max(1,...cs.map(x=>x.u.total));
   const invs=Object.values(S.invoices).sort((a,b)=>b.date-a.date);
   const out=invs.filter(i=>i.status==='sent');const drafts=invs.filter(i=>i.status==='draft');
   const m0=startOfMonth(Date.now());const paidM=invs.filter(i=>i.status==='paid'&&(i.paidAt||i.date)>=m0).reduce((s,i)=>s+i.subtotal,0);
   const overdue=out.filter(i=>Date.now()>i.date+(+S.settings.terms||30)*864e5);
   return '<div class="panel-head"><h1>To invoice</h1>'+(drafts.length?'<button class="btn ghost small" data-act="xeroall">Export '+drafts.length+' draft'+(drafts.length>1?'s':'')+' for Xero</button>':'')+'</div>'+
-  '<div class="grid g3" style="margin-bottom:16px"><div class="panel stat"><span class="eyebrow">Done, not yet invoiced</span><span class="v">'+gbp(total)+'</span><span class="s">'+cs.reduce((s,x)=>s+x.u.bookings.length,0)+' completed bookings across '+cs.length+' client'+(cs.length===1?'':'s')+', ex VAT</span></div>'+
+  '<div class="grid g3" style="margin-bottom:16px"><div class="panel stat"><span class="eyebrow">Done, not yet invoiced</span><span class="v">'+gbp(total)+'</span><span class="s">'+cs.reduce((s,x)=>s+x.u.lines.length,0)+' lines across '+cs.length+' client'+(cs.length===1?'':'s')+', ex VAT</span></div>'+
   '<div class="panel stat"><span class="eyebrow">Sent, awaiting payment</span><span class="v">'+gbp(out.reduce((s,i)=>s+i.total,0))+'</span><span class="s" style="'+(overdue.length?'color:var(--warn)':'')+'">'+(overdue.length?overdue.length+' past '+S.settings.terms+'-day terms':out.length+' invoice'+(out.length===1?'':'s')+', none overdue')+'</span></div>'+
   '<div class="panel stat"><span class="eyebrow">Paid this month</span><span class="v">'+gbp(paidM)+'</span><span class="s">Ex VAT</span></div></div>'+
   '<div class="split"><section class="panel"><h3 style="margin-bottom:16px">By client</h3>'+(cs.length?'<div class="bars">'+cs.map(x=>'<div class="bar"><button class="lab link" style="text-align:left;color:var(--fg);text-decoration:none" data-act="openclient" data-v="'+x.c.id+'">'+esc(x.c.name)+'</button><span class="track"><i style="width:'+(x.u.total/max*100)+'%;background:'+x.c.colour+'"></i></span><span class="val">'+gbp(x.u.total)+'</span></div>').join('')+'</div>':'<div class="empty">Every completed booking is invoiced.</div>')+'</section>'+
@@ -887,11 +926,11 @@ function openClientModal(cid){
   const c=cid?{...client(cid)}:{name:'',colour:COLOURS[Object.keys(S.clients).length%COLOURS.length],billing:'card',shortRate:300,halfDay:475,fullDay:750,editDay:350,editHours:8,hourlyRate:150,monthlyFee:0,vat:true,email:'',notes:''};
   S.modal={type:'client',c,html:()=>{const c=S.modal.c;return '<h2>'+(cid?'Edit client':'New client')+'</h2>'+
     '<label class="f">Client name<input type="text" id="m-name" value="'+esc(c.name)+'"></label>'+
-    '<div><div class="eyebrow" style="margin-bottom:8px">Colour</div><div class="swatches">'+COLOURS.map(x=>'<button data-act="swatch" data-v="'+x+'" aria-label="Colour '+x+'" aria-pressed="'+(c.colour===x)+'" style="background:'+x+'"></button>').join('')+'</div></div>'+
+    '<div><div class="eyebrow" style="margin-bottom:8px">Colour</div><div class="swatches">'+COLOURS.map(x=>'<button data-act="swatch" data-v="'+x+'" aria-label="Colour '+x+'" aria-pressed="'+(c.colour===x)+'" style="background:'+x+'"></button>').join('')+'<input type="color" id="m-colour" value="'+(/^#[0-9a-f]{6}$/i.test(c.colour)?c.colour:'#8A7F76')+'" title="Any colour" aria-label="Pick any colour"></div><p class="note" style="margin-top:6px">Brand neutrals, or the last swatch for any colour, such as the client\'s own.</p></div>'+
     '<label class="f">Suggested fees<select id="m-billing" data-act="billing"><option value="card" '+(c.billing==='card'?'selected':'')+'>Rate card: filming bands and edit days</option><option value="hourly" '+(c.billing==='hourly'?'selected':'')+'>Hourly</option><option value="retainer" '+(c.billing==='retainer'?'selected':'')+'>Monthly retainer</option></select></label>'+
     (c.billing==='card'?'<div class="row"><label class="f">Up to 2 hrs (£)<input type="number" id="m-short" value="'+c.shortRate+'"></label><label class="f">Half day (£)<input type="number" id="m-half" value="'+c.halfDay+'"></label><label class="f">Full day (£)<input type="number" id="m-full" value="'+c.fullDay+'"></label></div><div class="row"><label class="f">Edit day (£)<input type="number" id="m-edit" value="'+c.editDay+'"></label><label class="f">Hours in an edit day<input type="number" id="m-edith" value="'+c.editHours+'"></label></div><p class="note">These only suggest a fee when you book a shoot or edit. The fee on each booking is what gets invoiced.</p>':'')+
     (c.billing==='hourly'?'<label class="f">Hourly rate (£)<input type="number" id="m-hourly" value="'+c.hourlyRate+'"></label>':'')+
-    (c.billing==='retainer'?'<label class="f">Monthly fee (£)<input type="number" id="m-fee" value="'+c.monthlyFee+'"></label><p class="note">Book the retainer each month as a booking with this fee. Hours are still tracked so you can see what it costs you in time.</p>':'')+
+    (c.billing==='retainer'?'<div class="row"><label class="f">Monthly fee (£)<input type="number" id="m-fee" value="'+c.monthlyFee+'"></label><label class="f">Promised days a month<input type="number" id="m-rdays" min="0" step="0.5" value="'+(c.retainerDays||'')+'"></label><label class="f">Hours in a day<input type="number" id="m-rhours" min="1" value="'+(c.retainerDayHours||8)+'"></label></div><label class="f">Retainer started (month)<input type="month" id="m-rstart" value="'+esc(c.retainerStart||'')+'"></label><p class="note">The fee becomes an invoice line automatically each month. Clocked hours are compared with the promised days so you can see whether you are under- or over-delivering. Bookings for this client carry no fee unless you type one.</p>':'')+
     '<div class="row"><label class="f">Accounts email<input type="email" id="m-email" value="'+esc(c.email||'')+'"></label><label class="f">Charge VAT<select id="m-vat"><option value="1" '+(c.vat!==false?'selected':'')+'>Yes</option><option value="0" '+(c.vat===false?'selected':'')+'>No</option></select></label></div>'+
     '<label class="f">Notes<textarea id="m-notes" rows="2">'+esc(c.notes||'')+'</textarea></label>'+
     '<div class="acts">'+(cid?'<button class="btn ghost small" data-act="archive" data-v="'+cid+'">'+(c.archived?'Restore':'Archive')+'</button>':'')+'<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveclient" data-v="'+(cid||'')+'">Save client</button></div>'}};
@@ -901,6 +940,7 @@ function readClientForm(){const c=S.modal.c;const v=id=>{const el=document.getEl
   c.name=v('m-name')??c.name;c.billing=v('m-billing')??c.billing;
   [['m-short','shortRate'],['m-half','halfDay'],['m-full','fullDay'],['m-edit','editDay'],['m-edith','editHours'],['m-hourly','hourlyRate'],['m-fee','monthlyFee']].forEach(([i,k])=>{const x=v(i);if(x!==undefined)c[k]=+x||0});
   c.email=v('m-email')??c.email;c.notes=v('m-notes')??c.notes;const vt=v('m-vat');if(vt!==undefined)c.vat=vt==='1';
+  [['m-rdays','retainerDays'],['m-rhours','retainerDayHours']].forEach(([i,k])=>{const x=v(i);if(x!==undefined)c[k]=+x||0});const rs=v('m-rstart');if(rs!==undefined)c.retainerStart=rs;
 }
 
 function openEntryModal(eid,presetClient){
@@ -962,7 +1002,7 @@ document.addEventListener('click',async ev=>{
     case 'openclient':S.view='clients';S.client=v;render();window.scrollTo(0,0);break;
     case 'closeclient':S.client=null;render();break;
     case 'swatch':readClientForm();S.modal.c.colour=v;renderModal();break;
-    case 'saveclient':{readClientForm();const c=S.modal.c;if(!c.name.trim()){document.getElementById('m-name').focus();return}c.name=c.name.trim();const id=v||null;closeModal();await put('clients',id||null,stripId(c));toast('Saved '+c.name);break}
+    case 'saveclient':{readClientForm();const c=S.modal.c;if(!c.name.trim()){document.getElementById('m-name').focus();return}c.name=c.name.trim();if(!c.created)c.created=Date.now();const id=v||null;closeModal();await put('clients',id||null,stripId(c));toast('Saved '+c.name);break}
     case 'archive':{readClientForm();const c=S.modal.c;closeModal();await patch('clients',v,{archived:!c.archived});break}
     case 'saveentry':{const g=id=>document.getElementById(id).value;const date=g('e-date');let s=parseLocal(date,g('e-start')),e=parseLocal(date,g('e-end'));if(e<=s)e+=864e5;const cat=g('e-cat');const bl=g('e-bill');
       const data={person:g('e-person'),clientId:g('e-client'),category:cat,task:g('e-task').trim(),start:s,end:e,billable:bl==='auto'?BILLABLE_DEFAULT[cat]!==false:bl==='1'};
@@ -1027,6 +1067,7 @@ document.addEventListener('change',ev=>{if(ev.target.id==='importFile'&&ev.targe
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='d-task'){ev.preventDefault();startTimer()}});
 document.addEventListener('input',ev=>{const t=ev.target;if(t.dataset.draft)S.draft[t.dataset.draft]=t.value;if(S.modal&&S.modal.type==='event'){feeNote();availNote()}});
 document.addEventListener('change',()=>{if(S.modal&&S.modal.type==='event'){feeNote();availNote()}});
+document.addEventListener('input',ev=>{if(ev.target.id==='m-colour'){S.modal.c.colour=ev.target.value;document.querySelectorAll('.swatches [data-act=swatch]').forEach(b=>b.setAttribute('aria-pressed','false'))}});
 /* who is busy on a day: bookings of busy types, not cancelled, at least availMinHours long */
 function busyOn(day,person){const min=(+S.settings.availMinHours||3)*3.6e6;return Object.values(S.events).filter(e=>e.status!=='cancelled'&&BUSY_TYPES[e.type]&&startOfDay(e.start)===day&&(e.end-e.start)>=min&&(!person||(e.people||[]).includes(person)||e.type==='Unavailable'&&!(e.people||[]).length))}
 function availStrip(sel){
@@ -1042,7 +1083,7 @@ function availNote(){const n=document.getElementById('v-availnote');if(!n)return
   n.innerHTML=msgs.length?'<div class="banner warn" style="margin:0">'+esc(msgs.join('. '))+'. You can still book it, but the day will overlap.</div>':'';
   const strip=document.getElementById('v-strip');if(strip)strip.innerHTML=availStrip(day);
 }
-function feeNote(){const n=document.getElementById('v-feenote');if(!n)return;const g=id=>(document.getElementById(id)||{}).value;const date=g('v-date');if(!date)return;let st=parseLocal(date,g('v-start')),en=parseLocal(date,g('v-end'));if(en<=st)en=st+3600e3;const sug=suggestFee({clientId:g('v-client'),type:g('v-type'),start:st,end:en});const f=g('v-fee');if(g('v-type')==='Unavailable'){n.textContent='Blocks the day out. Not billed, hidden from the public availability page as busy.';return}n.textContent=f===''?(sug?'Will be set to '+gbp(sug)+' from the client\'s rates. Type a figure to override.':'No suggested fee for this client and type. Enter one, or leave blank for £0.'):(sug&&+f!==sug?'Rates would suggest '+gbp(sug)+'.':'')}
+function feeNote(){const n=document.getElementById('v-feenote');if(!n)return;const g=id=>(document.getElementById(id)||{}).value;const date=g('v-date');if(!date)return;let st=parseLocal(date,g('v-start')),en=parseLocal(date,g('v-end'));if(en<=st)en=st+3600e3;const sug=suggestFee({clientId:g('v-client'),type:g('v-type'),start:st,end:en});const f=g('v-fee');if(g('v-type')==='Unavailable'){n.textContent='Blocks the day out. Not billed, hidden from the public availability page as busy.';return}const cc=client(g('v-client'));if(cc&&rateCard(cc).billing==='retainer'&&f===''){n.textContent='Covered by the retainer, so no fee. Type one only for extra work outside the agreement.';return}n.textContent=f===''?(sug?'Will be set to '+gbp(sug)+' from the client\'s rates. Type a figure to override.':'No suggested fee for this client and type. Enter one, or leave blank for £0.'):(sug&&+f!==sug?'Rates would suggest '+gbp(sug)+'.':'')}
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&S.modal)closeModal();if(S.view==='schedule'&&!S.modal&&!ev.target.matches('input,select,textarea')){if(ev.key==='ArrowLeft')document.querySelector('[data-act=calnav][data-v="-1"]').click();if(ev.key==='ArrowRight')document.querySelector('[data-act=calnav][data-v="1"]').click();if(ev.key.toLowerCase()==='n'){ev.preventDefault();openEventModal(null,S.cal.sel?dayKey(S.cal.sel):null)}}});
 $('#themeBtn').addEventListener('click',()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':!matchMedia('(prefers-color-scheme: light)').matches;r.dataset.theme=dark?'light':'dark';try{localStorage.setItem('qm-theme',r.dataset.theme)}catch(e){}});
 try{const th=localStorage.getItem('qm-theme');if(th)document.documentElement.dataset.theme=th}catch(e){}

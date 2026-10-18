@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Quiet Media</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap">
+<style>
+/* Layout: a single sheet, read top to bottom on a phone on the way to set. Warm neutrals, sharp edges, one accent for the action. */
+:root{--bg:#0A0A0A;--surface:#111111;--raise:#181715;--fg:#FFFFFF;--muted:#9A918A;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.2);--tan:#8A7F76;--sand:#DDD5C3;--warn:#C9894E;--ok:#A7B3A0;--font:'DM Sans','Helvetica Neue',Arial,sans-serif;color-scheme:dark}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#F5F4F2;--surface:#EEECEA;--raise:#E6E3DF;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.25);--tan:#7A6F66;--sand:#8A7F76;--warn:#A8662C;--ok:#5F6E58;color-scheme:light}}
+:root[data-theme="light"]{--bg:#F5F4F2;--surface:#EEECEA;--raise:#E6E3DF;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.25);--tan:#7A6F66;--sand:#8A7F76;--warn:#A8662C;--ok:#5F6E58;color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{font-family:var(--font);font-weight:300;color:var(--fg);font-size:16px;line-height:1.6;padding-inline:16px;-webkit-font-smoothing:antialiased}
+body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.035'/%3E%3C/svg%3E");background-size:200px}
+.wrap{max-width:680px;margin:0 auto;padding-block:32px 72px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:36px}.brand svg{width:28px;height:28px}.brand b{font-weight:300;font-size:19px;letter-spacing:-.2px}
+.eyebrow{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--tan);margin-bottom:10px}
+h1{font-size:clamp(32px,6vw,48px);font-weight:300;letter-spacing:-.8px;line-height:1.05;margin-bottom:8px;text-wrap:balance}
+h2{font-size:20px;font-weight:300;letter-spacing:-.1px;margin-bottom:12px}
+.lead{color:var(--muted);margin-bottom:28px;max-width:52ch}
+.panel{background:var(--surface);border:1px solid var(--line);padding:20px;margin-bottom:16px}
+.day{display:grid;grid-template-columns:72px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
+.day:first-of-type{border-top:0;padding-top:0}
+.day .d b{display:block;font-size:30px;font-weight:300;letter-spacing:-.5px;line-height:1}.day .d small{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tan)}
+.day .t{display:grid;gap:4px}.day .t b{font-weight:500;font-size:22px;letter-spacing:-.2px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:15px}.kv dt{color:var(--muted)}.kv dd{min-width:0}
+.big{font-size:34px;font-weight:300;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:15px 24px;background:var(--fg);color:var(--bg);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;border:0;cursor:pointer;min-height:48px}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line-strong)}
+.acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.pill{display:inline-block;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line-strong);color:var(--muted);vertical-align:middle}
+.pill.pencil{color:var(--warn);border-color:var(--warn);border-style:dashed}.pill.confirmed{color:var(--ok);border-color:var(--ok)}
+.terms{white-space:pre-line;font-size:14px;color:var(--muted);line-height:1.7}
+.note{font-size:12px;color:var(--muted);margin-top:24px}
+.contact b{font-weight:400;user-select:all}
+ul.crew{list-style:none;display:grid;gap:6px}ul.crew li{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:6px}ul.crew li span{color:var(--muted)}
+.err{padding:40px 0;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><svg viewBox="0 0 400 400" aria-hidden="true"><path d="M 296.555 343.549 A 173 173 0 1 1 343.549 296.555 L 302.822 255.828 A 117 117 0 1 0 255.828 302.822 L 296.555 343.549 Z" fill="currentColor"/></svg><b>quiet media</b></div>
+  <div id="app"><p class="err">Loading…</p></div>
+</div>
+<script>
+(async function(){
+  const app=document.getElementById('app');
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const gbp=n=>'£'+(Number(n)||0).toLocaleString('en-GB',{maximumFractionDigits:0});
+  const fail=m=>{app.innerHTML='<p class="err">'+m+'</p>'};
+  const h=location.hash.slice(1);const dot=h.indexOf('.');if(dot<0)return fail('This link is incomplete. Ask for it to be sent again.');
+  const id=h.slice(0,dot),key=h.slice(dot+1);
+  if(!/^[A-Za-z0-9_-]+$/.test(id))return fail('This link is not valid.');
+  let blob;try{const r=await fetch('../p/'+id+'.json?'+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;blob=await r.json()}catch(e){return fail('This page is not ready yet. It usually appears within a minute of being sent; try again shortly.')}
+  const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+  let data;try{const raw=unb64(key.replace(/-/g,'+').replace(/_/g,'/')+'=='.slice(0,(4-key.length%4)%4));const k=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},k,unb64(blob.ct));data=JSON.parse(new TextDecoder().decode(pt))}catch(e){return fail('This link could not open the page. Ask for it to be sent again.')}
+  document.title=(data.kind==='crew'?'Call sheet · ':'Booking · ')+data.title+' — Quiet Media';
+  const dayEl=d=>{const dt=new Date(d.date);return '<div class="day"><div class="d"><b>'+dt.getDate()+'</b><small>'+dt.toLocaleDateString('en-GB',{weekday:'short',month:'short'})+'</small></div><div class="t"><b>'+(data.kind==='crew'&&d.call?'Call '+esc(d.call):esc(d.start)+' – '+esc(d.end))+'</b><span>'+(data.kind==='crew'&&d.call?'Working '+esc(d.start)+' – '+esc(d.end)+'. ':'')+esc(d.type==='Shoot'?'Filming':d.type)+(d.location?' · '+esc(d.location):'')+'</span></div></div>'};
+  const contact='<p class="contact">'+(data.replyPhone?'Call or text <b>'+esc(data.replyPhone)+'</b>. ':'')+(data.replyEmail?'Email <b>'+esc(data.replyEmail)+'</b>.':'')+'</p>';
+  const dates=data.days.map(d=>new Date(d.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})).join(', ');
+  if(data.kind==='crew'){
+    const body=encodeURIComponent('Confirmed for '+data.title+' on '+dates+'. – ');
+    app.innerHTML='<div class="eyebrow">Call sheet</div><h1>'+esc(data.title)+'</h1><p class="lead">'+esc(data.client?data.client+' · ':'')+esc(data.type==='Shoot'?'Filming':data.type)+(data.days.length>1?' · '+data.days.length+' days':'')+'</p>'+
+    '<div class="panel">'+data.days.map(dayEl).join('')+'</div>'+
+    (data.location?'<div class="panel"><h2>Location</h2><p>'+esc(data.location)+'</p><div class="acts"><a class="btn ghost" target="_blank" rel="noopener" href="https://maps.apple.com/?q='+encodeURIComponent(data.location)+'">Open in Maps</a></div></div>':'')+
+    (data.notes?'<div class="panel"><h2>Notes</h2><p style="white-space:pre-line">'+esc(data.notes)+'</p></div>':'')+
+    '<div class="panel"><h2>Who</h2><ul class="crew">'+(data.team||[]).map(n=>'<li>'+esc(n)+'<span>Quiet Media</span></li>').join('')+(data.crew||[]).map(c=>'<li>'+esc(c.name)+'<span>'+esc(c.role)+'</span></li>').join('')+'</ul></div>'+
+    '<div class="panel"><h2>Can you make it?</h2><p class="lead" style="margin-bottom:0">One tap to let '+esc(data.from)+' know.</p><div class="acts">'+(data.replyPhone?'<a class="btn" href="sms:'+esc(data.replyPhone.replace(/\s+/g,''))+(/(iPhone|iPad|Mac)/.test(navigator.userAgent)?'&':'?')+'body='+body+'">Confirm by text</a>':'')+(data.replyEmail?'<a class="btn'+(data.replyPhone?' ghost':'')+'" href="mailto:'+esc(data.replyEmail)+'?subject='+encodeURIComponent('Confirmed: '+data.title+' '+dates)+'&body='+body+'">Confirm by email</a>':'')+'</div>'+contact+'</div>'+
+    '<p class="note">Updated '+new Date(data.updated).toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'. If anything changes you will get a new message; this page updates with it.</p>';
+  }else{
+    const pencil=data.status==='pencil';
+    const subj=encodeURIComponent((pencil?'Confirmed: ':'Re: ')+data.title+' · '+dates);
+    const ok=encodeURIComponent('Hi '+data.from+', please confirm our booking for '+dates+'. Ref '+data.ref+'.\n\n');
+    const chg=encodeURIComponent('Hi '+data.from+', about the dates you are holding for us ('+dates+', ref '+data.ref+'), could we look at ');
+    app.innerHTML='<div class="eyebrow">'+(pencil?'Dates held for you':'Booking confirmed')+' <span class="pill '+(pencil?'pencil':'confirmed')+'">'+(pencil?'Pencil':'Confirmed')+'</span></div><h1>'+esc(data.title)+'</h1><p class="lead">'+(pencil?'We are holding these dates for '+esc(data.client||'you')+'. Nothing is committed until you confirm, and we will check back if we have not heard from you.':'These dates are booked for '+esc(data.client||'you')+'. We look forward to it.')+'</p>'+
+    '<div class="panel">'+data.days.map(dayEl).join('')+'</div>'+
+    '<div class="panel"><h2>Fee</h2><div class="big">'+gbp(data.fee)+'</div><p style="color:var(--muted)">'+(data.vat?'plus VAT':'no VAT')+(data.days.length>1?' for '+data.days.length+' days':'')+'. Travel and expenses, if any, are agreed in advance and itemised on the invoice.</p></div>'+
+    (data.notes?'<div class="panel"><h2>What we have planned</h2><p style="white-space:pre-line">'+esc(data.notes)+'</p></div>':'')+
+    (pencil?'<div class="panel"><h2>Shall we lock it in?</h2><p class="lead" style="margin-bottom:0">Confirming sends us a short email and the dates become a booking under the terms below.</p><div class="acts">'+(data.replyEmail?'<a class="btn" href="mailto:'+esc(data.replyEmail)+'?subject='+subj+'&body='+ok+'">Confirm booking</a><a class="btn ghost" href="mailto:'+esc(data.replyEmail)+'?subject='+encodeURIComponent('Change request: '+data.title)+'&body='+chg+'">Ask to change</a>':'')+'</div>'+contact+'</div>':'<div class="panel"><h2>Need to change something?</h2>'+contact+'<div class="acts">'+(data.replyEmail?'<a class="btn ghost" href="mailto:'+esc(data.replyEmail)+'?subject='+encodeURIComponent('Change request: '+data.title)+'&body='+chg+'">Ask to change</a>':'')+'</div></div>')+
+    (data.terms?'<div class="panel"><h2>Terms</h2><p class="terms">'+esc(data.terms)+'</p></div>':'')+
+    '<p class="note">Ref '+esc(data.ref)+'. Updated '+new Date(data.updated).toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'.</p>';
+  }
+})();
+</script>
+</body>
+</html>
