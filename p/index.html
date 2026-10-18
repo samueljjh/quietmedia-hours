@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap">
 <style>
-/* Layout: a single sheet, read top to bottom on a phone on the way to set. Warm neutrals, sharp edges, one accent for the action. */
+/* Layout: a single sheet, read top to bottom on a phone on the way to set. Warm neutrals, soft surfaces, one accent for the action. */
 :root{--bg:#0A0A0A;--surface:#111111;--raise:#181715;--fg:#FFFFFF;--muted:#9A918A;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.2);--tan:#8A7F76;--sand:#DDD5C3;--warn:#C9894E;--ok:#A7B3A0;--font:'DM Sans','Helvetica Neue',Arial,sans-serif;color-scheme:dark}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#F5F4F2;--surface:#EEECEA;--raise:#E6E3DF;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.25);--tan:#7A6F66;--sand:#8A7F76;--warn:#A8662C;--ok:#5F6E58;color-scheme:light}}
 :root[data-theme="light"]{--bg:#F5F4F2;--surface:#EEECEA;--raise:#E6E3DF;--fg:#0A0A0A;--muted:#6E655E;--line:rgba(10,10,10,.09);--line-strong:rgba(10,10,10,.25);--tan:#7A6F66;--sand:#8A7F76;--warn:#A8662C;--ok:#5F6E58;color-scheme:light}
@@ -23,17 +23,17 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
 h1{font-size:clamp(32px,6vw,48px);font-weight:300;letter-spacing:-.8px;line-height:1.05;margin-bottom:8px;text-wrap:balance}
 h2{font-size:20px;font-weight:300;letter-spacing:-.1px;margin-bottom:12px}
 .lead{color:var(--muted);margin-bottom:28px;max-width:52ch}
-.panel{background:var(--surface);border:1px solid var(--line);padding:20px;margin-bottom:16px}
+.panel{background:var(--surface);border-radius:20px;padding:20px;margin-bottom:12px}
 .day{display:grid;grid-template-columns:72px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
 .day:first-of-type{border-top:0;padding-top:0}
 .day .d b{display:block;font-size:30px;font-weight:300;letter-spacing:-.5px;line-height:1}.day .d small{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tan)}
 .day .t{display:grid;gap:4px}.day .t b{font-weight:500;font-size:22px;letter-spacing:-.2px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:15px}.kv dt{color:var(--muted)}.kv dd{min-width:0}
 .big{font-size:34px;font-weight:300;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
-.btn{display:inline-flex;align-items:center;justify-content:center;padding:15px 24px;background:var(--fg);color:var(--bg);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;border:0;cursor:pointer;min-height:48px}
-.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line-strong)}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:14px 22px;border-radius:999px;background:var(--fg);color:var(--bg);text-decoration:none;font-size:14px;font-weight:500;border:0;cursor:pointer;min-height:48px}
+.btn.ghost{background:var(--raise);color:var(--fg)}
 .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
-.pill{display:inline-block;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line-strong);color:var(--muted);vertical-align:middle}
+.pill{display:inline-block;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);vertical-align:middle}
 .pill.pencil{color:var(--warn);border-color:var(--warn);border-style:dashed}.pill.confirmed{color:var(--ok);border-color:var(--ok)}
 .terms{white-space:pre-line;font-size:14px;color:var(--muted);line-height:1.7}
 .note{font-size:12px;color:var(--muted);margin-top:24px}
@@ -41,6 +41,8 @@ h2{font-size:20px;font-weight:300;letter-spacing:-.1px;margin-bottom:12px}
 ul.crew{list-style:none;display:grid;gap:6px}ul.crew li{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:6px}ul.crew li span{color:var(--muted)}
 .err{padding:40px 0;color:var(--muted)}
 </style>
+<script src="sheet.js"></script>
+<script>document.head.insertAdjacentHTML('beforeend','<style>'+QMSheet.css+'.cs{--cs-inv:var(--bg);--cs-muted:var(--muted);--cs-line:var(--line-strong)}</style>')</script>
 </head>
 <body>
 <div class="wrap">
@@ -63,7 +65,8 @@ ul.crew{list-style:none;display:grid;gap:6px}ul.crew li{display:flex;justify-con
   const dayEl=d=>{const dt=new Date(d.date);return '<div class="day"><div class="d"><b>'+dt.getDate()+'</b><small>'+dt.toLocaleDateString('en-GB',{weekday:'short',month:'short'})+'</small></div><div class="t"><b>'+(data.kind==='crew'&&d.call?'Call '+esc(d.call):esc(d.start)+' – '+esc(d.end))+'</b><span>'+(data.kind==='crew'&&d.call?'Working '+esc(d.start)+' – '+esc(d.end)+'. ':'')+esc(d.type==='Shoot'?'Filming':d.type)+(d.location?' · '+esc(d.location):'')+'</span></div></div>'};
   const contact='<p class="contact">'+(data.replyPhone?'Call or text <b>'+esc(data.replyPhone)+'</b>. ':'')+(data.replyEmail?'Email <b>'+esc(data.replyEmail)+'</b>.':'')+'</p>';
   const dates=data.days.map(d=>new Date(d.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})).join(', ');
-  if(data.kind==='crew'){
+  if(data.kind==='crew'&&data.v>=2){document.querySelector('.brand').remove();app.innerHTML=QMSheet.render(data);QMSheet.weather(app,data);}
+  else if(data.kind==='crew'){
     const body=encodeURIComponent('Confirmed for '+data.title+' on '+dates+'. – ');
     app.innerHTML='<div class="eyebrow">Call sheet</div><h1>'+esc(data.title)+'</h1><p class="lead">'+esc(data.client?data.client+' · ':'')+esc(data.type==='Shoot'?'Filming':data.type)+(data.days.length>1?' · '+data.days.length+' days':'')+'</p>'+
     '<div class="panel">'+data.days.map(dayEl).join('')+'</div>'+

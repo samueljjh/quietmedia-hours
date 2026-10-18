@@ -371,12 +371,42 @@ tfoot td{border-bottom:0;font-weight:400}
 .ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px}
 .retbox{background:var(--raise);border-radius:var(--r);padding:12px 14px}.rb-figs b{font-weight:300;font-size:26px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}.rb-figs span{color:var(--muted)}
 .lock{max-width:560px;margin:40px auto;padding:0 4px}
+/* call sheet builder */
+.scrim.wide{padding:0;place-items:stretch}
+.scrim.wide .modal{width:100%;max-width:none;height:100%;max-height:none;border-radius:0;padding:0;display:block;animation:up .3s var(--ease)}
+@media (min-width:900px){.scrim.wide{padding:20px;place-items:center}.scrim.wide .modal{width:min(1240px,100%);height:calc(100% - 40px);border-radius:var(--r-xl);animation:zi .3s var(--ease)}}
+.csb{display:grid;grid-template-rows:auto 1fr auto;height:100%;min-height:0}
+.csb-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.csb-head h2{font-size:20px}.csb-head .note{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csb-head>div:first-child{flex:1;min-width:0}
+.csb-body{display:grid;grid-template-columns:minmax(0,1fr);min-height:0;overflow:hidden}
+@media (min-width:900px){.csb-body{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.csb-tabs{display:none}}
+.csb-form{overflow:auto;padding:16px 18px 24px;display:grid;gap:14px;align-content:start}
+.csb-prev{overflow:auto;background:var(--raise);padding:18px}
+@media (max-width:899px){.csb-prev{display:none}.csb.showprev .csb-prev{display:block}.csb.showprev .csb-form{display:none}}
+.csb-page{background:var(--bg);border-radius:var(--r);padding:22px 20px;max-width:720px;margin:0 auto;box-shadow:var(--shadow)}
+.csb-sec{display:grid;gap:10px;padding:14px;border-radius:var(--r);background:var(--surface)}
+.csb-sec h3{font-size:15px;font-weight:500}
+.csb-rows{display:grid;gap:6px}
+.csb-row{display:grid;grid-template-columns:110px 1fr 36px;gap:6px;align-items:center}
+.csb-row .iconbtn,.csb-crew .iconbtn{width:34px;height:34px;font-size:18px;font-weight:300}
+.csb-crew{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr) 100px 36px;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.csb-crew:first-child{border-top:0}
+.csb-crew.off b,.csb-crew.off input{opacity:.5}
+.csb-crew b{font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csb-crew input[type=text],.csb-crew input[type=tel],.csb-crew input[type=time],.csb-row input{min-height:38px;padding:6px 10px;font-size:14px}
+.csb-full{grid-column:1/-1}
+@media (max-width:520px){.csb-crew{grid-template-columns:auto minmax(0,1fr) 36px}.csb-crew input[type=time],.csb-crew input[type=tel]{grid-column:2}.csb-row{grid-template-columns:96px 1fr 36px}}
+.csb-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg)}
+.csb-send{display:flex;flex-wrap:wrap;gap:8px 16px}
+.csb-foot .row{gap:8px}.csb-foot .row>.btn{flex:0 0 auto}
 /* modal & sheet */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:grid;place-items:center;padding:16px;animation:sc .2s}
 @keyframes sc{from{opacity:0}}
 .modal{background:var(--bg);border-radius:var(--r-xl);width:min(560px,100%);max-height:calc(100% - 32px);overflow:auto;padding:24px;display:grid;gap:16px;box-shadow:var(--shadow);animation:zi .3s var(--ease)}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .scrim.sheet{place-items:end center;padding:0}
+.scrim.wide .modal{animation-name:up}
 .scrim.sheet .modal{width:100%;max-width:none;border-radius:22px 22px 0 0;max-height:88%;padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s var(--ease)}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
 .scrim.sheet .modal::before{content:'';width:38px;height:4px;border-radius:2px;background:var(--line-strong);margin:0 auto 4px}
@@ -405,6 +435,8 @@ hr.s{border:0;border-top:1px solid var(--line);margin:4px 0}
 .note{font-size:12px;color:var(--muted)}
 </style>
 <style>[hidden]{display:none!important}html,body{height:100%}body{padding-top:env(safe-area-inset-top,0px)}</style>
+<script src="p/sheet.js"></script>
+<script>document.head.insertAdjacentHTML('beforeend','<style>'+QMSheet.css+'.cs{--cs-inv:var(--bg);--cs-muted:var(--muted);--cs-line:var(--line-strong)}</style>')</script>
 </head>
 <body>
 <div class="wrap">
@@ -1017,7 +1049,7 @@ function vSettings(){
   '<div class="row"><label class="f">Publish<select id="s-ap" data-set="availPublish"><option value="1" '+(s.availPublish!==false?'selected':'')+'>On</option><option value="0" '+(s.availPublish===false?'selected':'')+'>Off</option></select></label><label class="f">Weeks ahead<input type="number" id="s-aw" min="2" max="52" data-set="availWeeks" value="'+(s.availWeeks||12)+'"></label><label class="f">Weekends<select id="s-awe" data-set="availWeekends"><option value="0" '+(!s.availWeekends?'selected':'')+'>Not available</option><option value="1" '+(s.availWeekends?'selected':'')+'>Available</option></select></label></div>'+
   '<div class="row"><label class="f">Enquiry email shown<input type="email" id="s-ae" data-set="availEmail" value="'+esc(s.availEmail||'')+'"></label><label class="f">A day counts as busy from (hrs)<input type="number" id="s-am" min="1" max="12" data-set="availMinHours" value="'+(s.availMinHours||3)+'"></label></div>'+
   '<p class="note">'+(S.avail==='ok'?'Last published '+fmtTime(S.availAt)+'.':S.avail==='noaccess'?'Not published: the GitHub token also needs Contents read and write on quietmedia-hours.':S.avail==='error'?'Not published yet; will retry after the next change.':'Publishes a few seconds after any booking changes.')+' <button class="link" data-act="pubavail">Publish now</button></p></section>'+
-  '<section class="panel grid"><h3>Sending to clients and crew</h3><div class="row"><label class="f">Sign messages as<input type="text" id="s-sn" data-set="senderName" value="'+esc(s.senderName||'')+'"></label><label class="f">Reply email<input type="email" id="s-re" data-set="replyEmail" value="'+esc(s.replyEmail||'')+'"></label><label class="f">Reply mobile<input type="tel" id="s-rp" data-set="replyPhone" value="'+esc(s.replyPhone||'')+'"></label><label class="f">Chase a pencil after (days)<input type="number" id="s-pd" min="1" data-set="pencilDays" value="'+(s.pencilDays||7)+'"></label></div>'+
+  '<section class="panel grid"><h3>Sending to clients and crew</h3><div class="row"><label class="f">Sign messages as<input type="text" id="s-sn" data-set="senderName" value="'+esc(s.senderName||'')+'"></label><label class="f">Reply email<input type="email" id="s-re" data-set="replyEmail" value="'+esc(s.replyEmail||'')+'"></label><label class="f">Reply mobile<input type="tel" id="s-rp" data-set="replyPhone" value="'+esc(s.replyPhone||'')+'"></label>'+PEOPLE.map(p=>'<label class="f">'+esc(name(p.id))+' mobile (for call sheets)<input type="tel" id="s-ph-'+p.id+'" data-set="phones.'+p.id+'" value="'+esc((s.phones||{})[p.id]||'')+'"></label>').join('')+'<label class="f">Chase a pencil after (days)<input type="number" id="s-pd" min="1" data-set="pencilDays" value="'+(s.pencilDays||7)+'"></label></div>'+
   '<label class="f">Booking terms shown to clients<textarea id="s-terms" rows="7" data-set="bookingTerms">'+esc(s.bookingTerms||'')+'</textarea></label><p class="note">Shown on every client booking page. Pencil holds the dates; a confirmed booking is subject to these terms.</p></section>'+
   '<section class="panel grid"><h3>Goals</h3><div class="row"><label class="f">Monthly revenue goal, ex VAT (£)<input type="number" id="s-goal" min="0" step="50" data-set="monthlyGoal" value="'+(s.monthlyGoal||'')+'"></label><label class="f">Weekly hours target each<input type="number" id="s-wk" min="0" data-set="weeklyHoursTarget" value="'+(s.weeklyHoursTarget||'')+'"></label></div></section>'+
   '<section class="panel grid"><h3>Invoicing</h3><div class="row"><label class="f">Number prefix<input type="text" id="s-prefix" data-set="prefix" value="'+esc(s.prefix)+'"></label><label class="f">Next number<input type="number" id="s-next" data-set="nextInvoice" value="'+s.nextInvoice+'"></label></div>'+
@@ -1209,7 +1241,8 @@ function openEventSheet(id){S.modal={type:'evsheet',cls:'sheet',html:()=>{const 
   const kv=[['When',when+(ev.type!=='Deadline'?', '+fmtTime(ev.start)+'–'+fmtTime(ev.end):'')+(portion(ev)===0.5?' · half day':'')],ev.callTime?['Call time',ev.callTime]:null,ev.location?['Where',esc(ev.location)]:null,['Who',(ev.people||[]).map(name).join(' & ')||'Unassigned'],
     (ev.crew||[]).length?['Crew',(ev.crew||[]).map(x=>esc(crewName(x.id))+(x.status==='confirmed'?' ✓':x.status==='declined'?' ✗':' · pencil')).join('<br>')]:null,
     pj?['Project',esc(pj.title)+' · '+gbp(pj.fee)]:null,r&&r.billing==='retainer'?['Billing','Within '+(c.retainerPeriod||'monthly')+' retainer']:null,inv?['Invoice',esc(inv.number)]:null,ev.notes?['Notes',esc(ev.notes)]:null].filter(Boolean);
-  const stBtns=st==='pencil'?'<button class="btn" data-act="evstatus" data-e="'+ev.id+'" data-v="confirmed">Confirm booking</button><button class="btn ghost" data-act="sendsheet" data-v="'+ev.id+'">Send pencil</button>':st==='cancelled'?'<button class="btn ghost" data-act="evstatus" data-e="'+ev.id+'" data-v="confirmed">Reinstate</button>':(ev.type==='Shoot'?'<button class="btn" data-act="sendsheet" data-v="'+ev.id+'">Call sheet</button>':'');
+  const cs=ev.type==='Shoot'?'<button class="btn'+(st==='confirmed'?'':' ghost')+'" data-act="callsheet" data-v="'+ev.id+'">Call sheet'+(sheetAnchor(ev).sheet&&sheetAnchor(ev).sheet.publishedAt?' v'+sheetAnchor(ev).sheet.version:'')+'</button>':'';
+  const stBtns=st==='pencil'?'<button class="btn" data-act="evstatus" data-e="'+ev.id+'" data-v="confirmed">Confirm booking</button><button class="btn ghost" data-act="sendsheet" data-v="'+ev.id+'">Client page</button>'+cs:st==='cancelled'?'<button class="btn ghost" data-act="evstatus" data-e="'+ev.id+'" data-v="confirmed">Reinstate</button>':cs+(ev.clientId?'<button class="btn ghost" data-act="sendsheet" data-v="'+ev.id+'">Client page</button>':'');
   return '<div class="sh-top '+evKind(ev)+'" style="--c:'+colour(ev.clientId)+'"><span class="bd">'+evLetter(ev)+'</span><div style="min-width:0"><h2>'+esc(ev.title||evTypeName(ev))+'</h2><p>'+evTypeName(ev)+(st!=='confirmed'?' · '+STATUS_LABEL[st].toLowerCase():'')+(ev.clientId?' · '+esc(cname(ev.clientId)):'')+'</p></div></div>'+
   '<dl class="kv l">'+kv.map(([k,val])=>'<dt>'+k+'</dt><dd>'+val+'</dd>').join('')+'</dl>'+
   '<div class="sh-act">'+stBtns+'<button class="btn ghost" data-act="editevent" data-v="'+ev.id+'">Edit</button><button class="btn ghost" data-act="ical" data-v="'+ev.id+'">iPhone calendar</button><button class="btn ghost" data-act="logevent" data-v="'+ev.id+'">Log as time</button>'+(st!=='cancelled'?'<button class="btn ghost" style="color:var(--danger)" data-act="evstatus" data-e="'+ev.id+'" data-v="cancelled">Cancel booking</button>':'')+'</div>'+
@@ -1391,9 +1424,9 @@ function sheetPayload(ev,kind){
   if(kind==='crew'){base.crew=(ev.crew||[]).filter(x=>x.status!=='declined').map(x=>({name:crewName(x.id),role:(S.crew[x.id]||{}).role||''}));base.team=(ev.people||[]).map(name);return base}
   base.fee=grp.reduce((t,e)=>t+eventValue(e),0);base.vat=c.vat!==false;base.status=evStatus(ev);base.terms=s.bookingTerms||'';base.ref=ev.groupId||ev.id;return base;
 }
-async function publishSheet(ev,kind){
+async function publishSheet(ev,kind,payload){
   const key=await sheetKeyFor(ev);const id=(ev.groupId||ev.id)+(kind==='crew'?'c':'k');
-  const blob=await encryptWith(key,sheetPayload(ev,kind));
+  const blob=await encryptWith(key,payload||sheetPayload(ev,kind));
   const saved=cfg;cfg={...saved,repo:saved.siteRepo||'quietmedia-hours'};
   try{let sha=null;try{const r=await ghGet('p/'+id+'.json');if(!r.missing)sha=r.sha}catch(e){}const r=await ghPut('p/'+id+'.json',blob,sha,'Publish '+kind+' page');cfg=saved;if(r.conflict)throw new Error('conflict');}
   catch(e){cfg=saved;throw e}
@@ -1411,9 +1444,8 @@ function openSendModal(evid){
     const pencilAge=ev.pencilSent?Math.floor((Date.now()-ev.pencilSent)/DAYMS):null;
     const clientBody=(reminder)=>(reminder?'Hi, a quick nudge on the dates we are holding for you: ':'Hi, we have pencilled the following dates for you: ')+dates+'. '+(ev.type==='Shoot'?'Filming':ev.type)+(ev.location?' at '+ev.location:'')+'. Everything is on your booking page, including how to confirm: '+(clientUrl||'[publish first]')+'\n\nBest,\n'+(s.senderName||'Samuel')+'\nQuiet Media';
     return '<h2>Send</h2><p class="note">'+esc(ev.title)+' · '+dates+'</p>'+
-    '<section class="panel" style="padding:16px"><div class="panel-head"><h3 class="small">Crew call sheet</h3><button class="btn ghost small" data-act="pubsheet" data-v="'+evid+'" data-k="crew">'+(crewUrl?'Update page':'Publish page')+'</button></div>'+
-    (crewUrl?'<div class="linkbox"><span>'+esc(crewUrl)+'</span><button class="link" data-act="copy" data-v="'+esc(crewUrl)+'">Copy</button></div>':'<p class="note">Publish to get a private link. It carries the key, so only people you send it to can read it. The page is live about a minute after publishing.</p>')+
-    ((ev.crew||[]).length?'<div class="list" style="margin-top:10px">'+(ev.crew||[]).map(x=>{const cr=S.crew[x.id]||{};return '<div class="item"><span class="sw" style="background:var(--line-strong)"></span><div class="main"><div class="t">'+esc(cr.name||'Crew')+' <span class="muted">· '+esc(cr.role||'')+' · '+gbp(x.rate)+'</span></div><div class="meta">'+(cr.phone?'<a class="link" href="'+smsLink(cr.phone,crewMsg(x))+'">Text</a> · ':'')+(cr.email?'<a class="link" href="'+mailLink(cr.email,'Call sheet: '+ev.title+' '+dates,crewMsg(x))+'">Email</a>':'')+(!cr.phone&&!cr.email?'No contact details':'')+'</div></div><div class="end"><select data-act="crewstatus" data-e="'+evid+'" data-c="'+x.id+'"><option value="pencil" '+(x.status==='pencil'||!x.status?'selected':'')+'>Pencil</option><option value="confirmed" '+(x.status==='confirmed'?'selected':'')+'>Confirmed</option><option value="declined" '+(x.status==='declined'?'selected':'')+'>Declined</option></select></div></div>'}).join('')+'</div>':'<p class="note">No crew on this booking.</p>')+'</section>'+
+    (ev.type==='Shoot'||(ev.crew||[]).length?'<section class="panel" style="padding:16px"><div class="panel-head"><h3 class="small">Crew</h3><button class="btn ghost small" data-act="callsheet" data-v="'+evid+'">Call sheet</button></div>'+
+    ((ev.crew||[]).length?'<div class="list">'+(ev.crew||[]).map(x=>{const cr=S.crew[x.id]||{};return '<div class="item"><span class="sw" style="background:var(--line-strong)"></span><div class="main"><div class="t">'+esc(cr.name||'Crew')+' <span class="muted">· '+gbp(x.rate)+'</span></div></div><div class="end"><select data-act="crewstatus" data-e="'+evid+'" data-c="'+x.id+'"><option value="pencil" '+(x.status==='pencil'||!x.status?'selected':'')+'>Pencil</option><option value="confirmed" '+(x.status==='confirmed'?'selected':'')+'>Confirmed</option><option value="declined" '+(x.status==='declined'?'selected':'')+'>Declined</option></select></div></div>'}).join('')+'</div>':'<p class="note">No crew on this booking.</p>')+'<p class="note" style="margin-top:8px">Only confirmed crew go on the call sheet. Build, preview and send it from the call sheet button.</p></section>':'')+
     (c?'<section class="panel" style="padding:16px"><div class="panel-head"><h3 class="small">Client booking page</h3><button class="btn ghost small" data-act="pubsheet" data-v="'+evid+'" data-k="client">'+(clientUrl?'Update page':'Publish page')+'</button></div>'+
     (clientUrl?'<div class="linkbox"><span>'+esc(clientUrl)+'</span><button class="link" data-act="copy" data-v="'+esc(clientUrl)+'">Copy</button></div>':'<p class="note">The client sees the dates, fee, your terms, and Confirm / Ask to change buttons.</p>')+
     '<div class="row" style="margin-top:10px;align-items:center"><a class="btn small'+(clientUrl?'':' ghost')+'" href="'+mailLink(c.email||'',(st==='pencil'?'Pencilled: ':'Booking confirmed: ')+ev.title+' · '+dates,clientBody(false))+'">Email '+(st==='pencil'?'pencil':'confirmation')+'</a>'+(st==='pencil'&&pencilAge!=null?'<a class="btn ghost small" href="'+mailLink(c.email||'','Reminder: dates held for you · '+dates,clientBody(true))+'">Send reminder</a><span class="note">Pencilled '+pencilAge+' day'+(pencilAge===1?'':'s')+' ago'+(pencilAge>=(+s.pencilDays||7)?', <b style="color:var(--warn)">waiting too long</b>':'')+'</span>':'')+'</div>'+
@@ -1422,6 +1454,85 @@ function openSendModal(evid){
     '<div class="acts"><button class="btn" data-act="closemodal">Done</button></div>'}};
   renderModal();
 }
+/* ===== call sheet builder: shape the sheet, see it live, publish, send ===== */
+function sheetAnchor(ev){return groupOf(ev)[0]||ev}
+function defaultSheet(ev){
+  const grp=groupOf(ev).filter(e=>e.status!=='cancelled');const s=S.settings;const c=client(ev.clientId);
+  return {title:ev.title||'',production:c?c.name:'',showPhones:false,weather:true,
+    days:grp.map(e=>({id:e.id,call:e.callTime||fmtTime(e.start),shootCall:'',wrap:fmtTime(e.end),location:{name:'',address:e.location||'',notes:''},schedule:[{time:e.callTime||fmtTime(e.start),item:'Crew call. Unload and set up.'},{time:'',item:''}],weatherNote:''})),
+    crew:(ev.crew||[]).filter(x=>x.status!=='declined').map(x=>({id:x.id,name:crewName(x.id),role:'',call:'',include:x.status==='confirmed'})),
+    contacts:PEOPLE.filter(p=>(ev.people||[]).includes(p.id)).map(p=>({name:name(p.id),role:p.id==='samuel'?'Director':'Producer',phone:(s.phones||{})[p.id]||''})),
+    hospital:{name:'',address:'',phone:''},hotel:{label:'Hotel',name:'',address:'',notes:''},equipment:'',notes:'',version:0};
+}
+function loadSheet(ev){
+  const a=sheetAnchor(ev);const d=defaultSheet(ev);const saved=a.sheet;if(!saved)return d;
+  const sh={...d,...saved};
+  sh.days=d.days.map(dd=>{const o=(saved.days||[]).find(x=>x.id===dd.id);return o?{...dd,...o,location:{...dd.location,...(o.location||{})}}:dd});
+  const crewIds=new Set(d.crew.map(x=>x.id));
+  sh.crew=d.crew.map(dc=>{const o=(saved.crew||[]).find(x=>x.id===dc.id);return o?{...dc,...o,name:dc.name}:dc}).concat((saved.crew||[]).filter(x=>!x.id&&x.name));
+  sh.contacts=(saved.contacts&&saved.contacts.length)?saved.contacts:d.contacts;
+  sh.hospital={...d.hospital,...(saved.hospital||{})};sh.hotel={...d.hotel,...(saved.hotel||{})};
+  return sh;
+}
+function crewSheetPayload(ev,sh,version){
+  const s=S.settings;const live=groupOf(ev).filter(e=>e.status!=='cancelled');
+  return {kind:'crew',v:2,title:sh.title,production:sh.production,
+    days:sh.days.filter(d=>live.some(e=>e.id===d.id)).map(d=>{const e=S.events[d.id];return {date:e.start,call:d.call,shootCall:d.shootCall,wrap:d.wrap,location:d.location,schedule:(d.schedule||[]).filter(r=>r.item),weatherNote:d.weatherNote}}),
+    crew:sh.crew.filter(c=>c.include&&c.name).map(c=>({name:c.name,role:c.role||'',call:c.call||'',phone:sh.showPhones?((c.id&&(S.crew[c.id]||{}).phone)||c.phone||''):''})),
+    contacts:(sh.contacts||[]).filter(c=>c.name),hospital:sh.hospital,hotel:sh.hotel,equipment:sh.equipment,notes:sh.notes,weather:sh.weather!==false,
+    from:s.senderName||'Quiet Media',replyEmail:s.replyEmail||s.availEmail||'',replyPhone:s.replyPhone||'',version:version||sh.version||1,updated:Date.now()};
+}
+function sheetUrlFor(ev,sh){const a=sheetAnchor(ev);const k=ev.sheetKey||a.sheetKey;if(!k||!sh.publishedAt)return '';return 'https://hours.quietmedia.co.uk/p/#'+(ev.groupId||ev.id)+'c.'+k}
+function readSheetForm(){const sh=S.modal.sheet;document.querySelectorAll('#csb-form [data-s]').forEach(el=>{const p=el.dataset.s.split('.');let o=sh;for(let i=0;i<p.length-1;i++){if(o[p[i]]==null)o[p[i]]={};o=o[p[i]]}const k=p[p.length-1];o[k]=el.type==='checkbox'?el.checked:el.value});S.modal.dirty=true}
+function csPreview(){const m=S.modal;if(!m||m.type!=='callsheet')return;const el=document.getElementById('csb-page');if(!el)return;const ev=S.events[m.evid];el.innerHTML=QMSheet.render(crewSheetPayload(ev,m.sheet));(m.wx||[]).forEach((h,i)=>{const w=el.querySelector('#cs-wx-'+i+' .cs-wx');if(w&&h)w.innerHTML=h});const st=document.getElementById('csb-status');if(st)st.textContent=m.dirty?'Unsaved changes':(m.sheet.publishedAt?'Published v'+m.sheet.version+' · '+fmtDate(m.sheet.publishedAt,{day:'numeric',month:'short'})+' '+fmtTime(m.sheet.publishedAt):'Draft')}
+async function csWeather(){const m=S.modal;if(!m||m.type!=='callsheet')return;const el=document.getElementById('csb-page');if(!el)return;const data=crewSheetPayload(S.events[m.evid],m.sheet);await QMSheet.weather(el,data);m.wx=data.days.map((d,i)=>{const w=el.querySelector('#cs-wx-'+i+' .cs-wx');return w?w.innerHTML:''})}
+const fld=(label,path,val,type,ph)=>'<label class="f">'+label+'<input type="'+(type||'text')+'" data-s="'+path+'" value="'+esc(val||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></label>';
+function openCallSheet(evid){
+  const ev0=S.events[evid];if(!ev0)return;
+  const sheet=loadSheet(ev0);
+  S.modal={type:'callsheet',cls:'wide',evid,sheet,dirty:false,tab:'form',wx:[],html:()=>{
+    const m=S.modal;const sh=m.sheet;const ev=S.events[m.evid];if(!ev)return '';const grp=groupOf(ev).filter(e=>e.status!=='cancelled');const st=evStatus(ev);
+    const url=sheetUrlFor(ev,sh);const dates=grp.map(e=>fmtDate(e.start,{weekday:'short',day:'numeric',month:'short'})).join(', ');
+    const dayForm=(d,i)=>{const e=S.events[d.id];if(!e)return '';return '<section class="csb-sec"><h3>'+(grp.length>1?'Day '+(i+1)+' · ':'')+fmtDate(e.start,{weekday:'long',day:'numeric',month:'long'})+'</h3>'+
+      '<div class="row">'+fld('General call','days.'+i+'.call',d.call,'time')+fld('Shooting call','days.'+i+'.shootCall',d.shootCall,'time')+fld('Est. wrap','days.'+i+'.wrap',d.wrap,'time')+'</div>'+
+      '<div class="row">'+fld('Location name','days.'+i+'.location.name',d.location.name,'text','Studio, venue or house')+fld('Address','days.'+i+'.location.address',d.location.address,'text','Full address with postcode')+'</div>'+
+      '<label class="f">Parking, access, where to meet<textarea rows="2" data-s="days.'+i+'.location.notes">'+esc(d.location.notes||'')+'</textarea></label>'+
+      '<div class="eyebrow" style="margin-top:6px">Schedule</div><div class="csb-rows">'+(d.schedule||[]).map((r,j)=>'<div class="csb-row"><input type="time" data-s="days.'+i+'.schedule.'+j+'.time" value="'+esc(r.time||'')+'"><input type="text" data-s="days.'+i+'.schedule.'+j+'.item" value="'+esc(r.item||'')+'" placeholder="What happens"><button class="iconbtn" data-act="csrow" data-v="rm" data-d="'+i+'" data-j="'+j+'" aria-label="Remove">×</button></div>').join('')+'</div><button class="link" data-act="csrow" data-v="add" data-d="'+i+'">Add a line</button>'+
+      '<div class="row" style="margin-top:8px;align-items:center">'+fld('Weather note (optional)','days.'+i+'.weatherNote',d.weatherNote,'text','e.g. Exposed site, bring layers')+'<button class="link" data-act="cswx" style="flex:0 0 auto">Refresh forecast</button></div></section>'};
+    const crewRows=sh.crew.map((c,i)=>{const cr=c.id?S.crew[c.id]:null;const booked=c.id?((ev.crew||[]).find(x=>x.id===c.id)||{}):null;const pencil=booked&&booked.status!=='confirmed';
+      return '<div class="csb-crew'+(c.include?'':' off')+'"><label class="chip"><input type="checkbox" data-s="crew.'+i+'.include" '+(c.include?'checked':'')+'></label>'+(c.id?'<b>'+esc(c.name)+'</b>':'<input type="text" data-s="crew.'+i+'.name" value="'+esc(c.name||'')+'" placeholder="Name">')+'<input type="text" data-s="crew.'+i+'.role" value="'+esc(c.role||'')+'" placeholder="Role on this job"><input type="time" data-s="crew.'+i+'.call" value="'+esc(c.call||'')+'" title="Call time if different">'+(c.id?'':'<input type="tel" data-s="crew.'+i+'.phone" value="'+esc(c.phone||'')+'" placeholder="Mobile">')+(c.id?'':'<button class="iconbtn" data-act="cscrew" data-v="rm" data-j="'+i+'" aria-label="Remove">×</button>')+
+      (pencil?'<span class="note csb-full" style="color:var(--warn)">Pencilled, not confirmed. Left off the sheet until you confirm them'+(cr&&(cr.phone||cr.email)?' or tick the box':'')+'.</span>':'')+'</div>'});
+    const contactRows=(sh.contacts||[]).map((c,i)=>'<div class="csb-crew"><input type="text" data-s="contacts.'+i+'.name" value="'+esc(c.name||'')+'" placeholder="Name"><input type="text" data-s="contacts.'+i+'.role" value="'+esc(c.role||'')+'" placeholder="Role"><input type="tel" data-s="contacts.'+i+'.phone" value="'+esc(c.phone||'')+'" placeholder="Mobile"><button class="iconbtn" data-act="cscontact" data-v="rm" data-j="'+i+'" aria-label="Remove">×</button></div>').join('');
+    const included=sh.crew.filter(c=>c.include&&c.name);
+    const msg=(c)=>'Hi '+String(c.name).split(' ')[0]+', call sheet for '+sh.title+' on '+dates+(sh.days[0]&&sh.days[0].call?'. Call '+sh.days[0].call:'')+': '+(url||'[publish first]')+' – '+(S.settings.senderName||'Samuel');
+    const sendList=included.length?'<div class="csb-send">'+included.map(c=>{const cr=c.id?S.crew[c.id]||{}:{phone:c.phone||''};return '<span class="chip"><b style="font-weight:500">'+esc(c.name)+'</b>'+(cr.phone?' <a class="link" href="'+smsLink(cr.phone,msg(c))+'">Text</a>':'')+(cr.email?' <a class="link" href="'+mailLink(cr.email,'Call sheet: '+sh.title+' · '+dates,msg(c))+'">Email</a>':'')+(!cr.phone&&!cr.email?' <span class="note">no contact</span>':'')+'</span>'}).join('')+'</div>':'<span class="note">No crew on the sheet yet.</span>';
+    const form='<div class="csb-form" id="csb-form">'+
+      (st==='pencil'?'<div class="banner warn" style="margin:0 0 14px">This booking is still a pencil with the client. You can prepare the sheet now and send it once the job is confirmed.</div>':'')+
+      '<section class="csb-sec"><div class="row">'+fld('Title','title',sh.title)+fld('Production / client','production',sh.production)+'</div></section>'+
+      sh.days.map(dayForm).join('')+
+      '<section class="csb-sec"><h3>Crew</h3><p class="note">Names only. Add a role here if it helps, since roles change job to job. Only ticked people appear.</p><div class="csb-rows">'+crewRows.join('')+'</div><div class="row" style="align-items:center;margin-top:8px"><button class="link" data-act="cscrew" data-v="add" style="flex:0 0 auto">Add someone not in your crew list</button><label class="chip" style="flex:0 0 auto"><input type="checkbox" data-s="showPhones" '+(sh.showPhones?'checked':'')+'> Show mobile numbers on the sheet</label></div></section>'+
+      '<section class="csb-sec"><h3>Contacts on the day</h3><div class="csb-rows">'+contactRows+'</div><button class="link" data-act="cscontact" data-v="add">Add a contact</button></section>'+
+      '<section class="csb-sec"><h3>Nearest A&amp;E</h3><div class="row">'+fld('Hospital','hospital.name',sh.hospital.name)+fld('Phone','hospital.phone',sh.hospital.phone,'tel')+'</div>'+fld('Address','hospital.address',sh.hospital.address)+(sh.days[0]&&sh.days[0].location.address?'<a class="link" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('A&E hospital near '+sh.days[0].location.address)+'">Find the nearest A&amp;E on Google Maps</a>':'<span class="note">Add the location address first and this can look up the nearest A&amp;E.</span>')+'</section>'+
+      '<section class="csb-sec"><h3>Hotel or unit base</h3><div class="row">'+fld('Label','hotel.label',sh.hotel.label||'Hotel','text','Hotel, Unit base, Green room')+fld('Name','hotel.name',sh.hotel.name)+'</div>'+fld('Address','hotel.address',sh.hotel.address)+'<label class="f">Check‑in, rooms, who to ask for<textarea rows="2" data-s="hotel.notes">'+esc(sh.hotel.notes||'')+'</textarea></label></section>'+
+      '<section class="csb-sec"><h3>Please bring</h3><label class="f">One item per line<textarea rows="4" data-s="equipment" placeholder="Own headphones&#10;Warm layers and waterproofs&#10;Black clothing for the show">'+esc(sh.equipment||'')+'</textarea></label></section>'+
+      '<section class="csb-sec"><h3>Notes</h3><label class="f">Catering, dress code, safety, anything else<textarea rows="4" data-s="notes">'+esc(sh.notes||'')+'</textarea></label><label class="chip" style="margin-top:10px"><input type="checkbox" data-s="weather" '+(sh.weather!==false?'checked':'')+'> Show the weather forecast</label></section>'+
+      '</div>';
+    return '<div class="csb'+(m.tab==='preview'?' showprev':'')+'"><div class="csb-head"><div style="min-width:0"><h2>Call sheet</h2><span class="note">'+esc(ev.title)+' · '+esc(dates)+'</span></div><div class="seg csb-tabs"><button data-act="cstab" data-v="form" aria-pressed="'+(m.tab!=='preview')+'">Edit</button><button data-act="cstab" data-v="preview" aria-pressed="'+(m.tab==='preview')+'">Preview</button></div><button class="iconbtn" data-act="closemodal" aria-label="Close"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>'+
+      '<div class="csb-body">'+form+'<div class="csb-prev"><div class="csb-page" id="csb-page">'+QMSheet.render(crewSheetPayload(ev,sh))+'</div></div></div>'+
+      '<div class="csb-foot"><span class="note" id="csb-status">'+(m.dirty?'Unsaved changes':(sh.publishedAt?'Published v'+sh.version+' · '+fmtDate(sh.publishedAt,{day:'numeric',month:'short'})+' '+fmtTime(sh.publishedAt):'Draft'))+'</span>'+
+      (url?'<div class="linkbox" style="flex:1 1 240px"><span>'+esc(url)+'</span><button class="link" data-act="copy" data-v="'+esc(url)+'">Copy</button></div>':'')+
+      '<div class="row" style="flex:0 1 auto;align-items:center"><button class="btn ghost small" data-act="cssave">Save draft</button><button class="btn small" data-act="cspublish" '+(S.writable?'':'disabled')+'>'+(sh.publishedAt?'Publish update':'Publish & get link')+'</button></div>'+
+      '<div class="csb-full"><span class="eyebrow" style="margin-right:10px">Send to</span>'+sendList+'</div></div></div>';
+  }};
+  renderModal();setTimeout(csWeather,50);
+}
+async function saveSheet(){const m=S.modal;if(!m||m.type!=='callsheet')return;readSheetForm();const ev=S.events[m.evid];const a=sheetAnchor(ev);const sh=JSON.parse(JSON.stringify(m.sheet));await patch('events',a.id,{sheet:sh});m.dirty=false;csPreview()}
+async function publishCallSheet(b){const m=S.modal;const ev=S.events[m.evid];readSheetForm();const sh=m.sheet;const v=(sh.version||0)+1;
+  b.disabled=true;b.textContent='Publishing…';
+  try{const url=await publishSheet(ev,'crew',crewSheetPayload(ev,sh,v));sh.version=v;sh.publishedAt=Date.now();await patch('events',sheetAnchor(ev).id,{sheet:JSON.parse(JSON.stringify(sh))});m.dirty=false;S.sheetUrls=S.sheetUrls||{};S.sheetUrls[m.evid+'c']=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied; live in about a minute.')}
+  catch(e){toast(e.code==='auth'?'The GitHub token needs access to quietmedia-hours to publish pages.':'Could not publish. Try again.')}
+  renderModal()}
+
 function pencilsPanel(){
   const now=Date.now();const seen={};const list=Object.values(S.events).filter(e=>evStatus(e)==='pencil'&&e.start>=startOfDay(now)&&e.clientId).sort((a,b)=>a.start-b.start).filter(e=>{const k=e.groupId||e.id;if(seen[k])return false;seen[k]=1;return true});
   if(!list.length)return '';
@@ -1501,6 +1612,14 @@ document.addEventListener('click',async ev=>{
     case 'mcpick':{readCrewForm();const d=Number(v);const m=S.modal;if(m.evid){m.days=[d]}else{const i=m.days.indexOf(d);if(i>=0)m.days.splice(i,1);else m.days.push(d)}availNote();feeNote();break}
     case 'calwho':S.cal.who=S.cal.who===v?'all':v;render();break;
     case 'sendsheet':openSendModal(v);break;
+    case 'callsheet':openCallSheet(v);break;
+    case 'cstab':readSheetForm();S.modal.tab=v;renderModal();csPreview();break;
+    case 'csrow':{readSheetForm();const d=S.modal.sheet.days[+b.dataset.d];if(v==='add')d.schedule.push({time:'',item:''});else d.schedule.splice(+b.dataset.j,1);renderModal();csPreview();break}
+    case 'cscrew':{readSheetForm();const c=S.modal.sheet.crew;if(v==='add')c.push({name:'',role:'',call:'',phone:'',include:true});else c.splice(+b.dataset.j,1);renderModal();csPreview();break}
+    case 'cscontact':{readSheetForm();const c=S.modal.sheet.contacts;if(v==='add')c.push({name:'',role:'',phone:''});else c.splice(+b.dataset.j,1);renderModal();csPreview();break}
+    case 'cswx':readSheetForm();S.modal.wx=[];csPreview();csWeather();break;
+    case 'cssave':await saveSheet();toast('Draft saved');break;
+    case 'cspublish':await publishCallSheet(b);csPreview();break;
     case 'pubsheet':{const ev=S.events[v];b.disabled=true;b.textContent='Publishing…';try{const url=await publishSheet(ev,b.dataset.k);S.sheetUrls=S.sheetUrls||{};S.sheetUrls[v+(b.dataset.k==='crew'?'c':'k')]=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied; live in about a minute.')}catch(e){toast(e.code==='auth'?'The GitHub token needs access to quietmedia-hours to publish pages.':'Could not publish. Try again.')}renderModal();break}
     case 'copy':try{await navigator.clipboard.writeText(v);toast('Copied')}catch(e){toast('Select the link and copy it')}break;
     case 'evstatus':{const ev=S.events[b.dataset.e];for(const e of groupOf(ev)){await patch('events',e.id,{status:v})}renderModal();break}
@@ -1540,6 +1659,7 @@ document.addEventListener('change',ev=>{
   if(t.dataset.act==='billing'){readClientForm();renderModal()}
   if(t.dataset.set){const k=t.dataset.set;let val=t.type==='number'?(+t.value||0):t.value;
     if(k==='availPublish'||k==='availWeekends')val=val==='1';
+    if(k.startsWith('phones.')){const p=k.split('.')[1];saveSettings({phones:{...(S.settings.phones||{}),[p]:val}})}else
     if(k.startsWith('names.')){const p=k.split('.')[1];saveSettings({names:{...S.settings.names,[p]:val||PEOPLE.find(x=>x.id===p).def}})}else saveSettings({[k]:val})}
 });
 function confirmed(k){const n=Date.now();if(confirmed.k===k&&n-confirmed.t<4000){confirmed.k=null;return true}confirmed.k=k;confirmed.t=n;return false}
@@ -1553,6 +1673,7 @@ document.addEventListener('submit',async ev=>{if(ev.target.id!=='lockForm')retur
 });
 document.addEventListener('change',ev=>{if(ev.target.id==='importFile'&&ev.target.files[0])importBackup(ev.target.files[0])});
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='d-task'){ev.preventDefault();startTimer()}});
+document.addEventListener('input',ev=>{if(S.modal&&S.modal.type==='callsheet'&&ev.target.closest('#csb-form')){readSheetForm();csPreview()}});
 document.addEventListener('input',ev=>{const t=ev.target;if(t.dataset.draft){S.draft[t.dataset.draft]=t.value;if(t.dataset.draft==='clientId'){S.draft.projectId='';render()}}if(S.modal&&S.modal.type==='event'){feeNote();availNote()}});
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.dataset&&t.dataset.crew!==undefined){const r=document.querySelector('[data-crewrate="'+t.dataset.crew+'"]');if(r)r.disabled=!t.checked;readCrewForm();return}
