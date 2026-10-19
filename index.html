@@ -95,9 +95,10 @@ nav.tabs svg{display:none}
   .livebar.on{display:flex;position:fixed;left:12px;right:12px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:49;background:var(--fg);color:var(--bg);align-items:center;gap:12px;padding:10px 12px 10px 16px;font-size:13px;border-radius:999px;box-shadow:var(--shadow)}
   .livebar .lt{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .livebar .lt b{font-weight:500;font-variant-numeric:tabular-nums;margin-right:8px}
-  .livebar button{background:var(--bg);color:var(--fg);border:0;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:500}
+  .livebar button{background:var(--bg);color:var(--fg);border:0;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:500}.livebar button.ghost{background:color-mix(in srgb,var(--bg) 18%,transparent);color:var(--bg)}
   .livebar .ldot{width:8px;height:8px;border-radius:50%;background:var(--bg);flex:none;animation:p 1.6s ease-in-out infinite}
   .btn{padding:14px 20px;font-size:14px}
+  .paused .row .btn{padding:10px 14px}
   .btn.small{padding:10px 14px;font-size:13px}
   .item{padding:13px 0}
   .modal{padding:20px;max-height:calc(100% - 16px)}
@@ -460,6 +461,7 @@ tfoot td{border-bottom:0;font-weight:400}
 .kv.l{grid-template-columns:auto 1fr;gap:9px 16px}.kv.l dd{text-align:left}
 hr.s{border:0;border-top:1px solid var(--line);margin:4px 0}
 .note{font-size:12px;color:var(--muted)}
+.paused{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 12px;padding:12px 14px;border-radius:14px;background:var(--raise);border:1px dashed var(--line-strong);animation:zi .4s var(--ease)}.paused .pt{min-width:0;flex:1}.paused .pt b{display:block;font-weight:400;font-size:15px}.paused .eyebrow{display:block;margin-bottom:2px}
 </style>
 <style>[hidden]{display:none!important}html,body{height:100%}body{padding-top:env(safe-area-inset-top,0px)}</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
@@ -772,23 +774,30 @@ function clientValue(cid,from,to){
 }
 function lastInvoice(cid){return Object.values(S.invoices).filter(i=>i.clientId===cid).sort((a,b)=>b.date-a.date)[0]}
 function running(p){return Object.values(S.entries).find(e=>e.person===p&&!e.end)}
+/* Paused jobs: the entry is closed (time stays logged) and the job is held so it can be picked up again as a new entry. */
+const pausedJob=p=>(S.settings.paused||{})[p]||null;
+async function setPaused(p,job){const paused={...(S.settings.paused||{})};if(job)paused[p]=job;else delete paused[p];await saveSettings({paused})}
+async function pauseTimer(p){const e=running(p);if(!e)return;const h=hrs(entryH({...e,end:Date.now()}));await patch('entries',e.id,{end:Date.now()});await setPaused(p,{clientId:e.clientId,projectId:e.projectId||'',category:e.category,task:e.task||'',at:Date.now(),logged:(pausedJob(p)&&pausedJob(p).clientId===e.clientId&&pausedJob(p).category===e.category&&(pausedJob(p).task||'')===(e.task||'')?pausedJob(p).logged||0:0)+entryH({...e,end:Date.now()})});toast('Paused. '+h+' logged to '+cname(e.clientId))}
+async function resumePaused(p){const j=pausedJob(p);if(!j)return;S.draft={clientId:j.clientId,projectId:j.projectId,category:j.category,task:j.task};await startTimer({resume:true})}
 
 /* ---------- actions ---------- */
-async function startTimer(){
+async function startTimer(opt){
   if(!S.writable)return;
   const d=S.draft;const cid=d.clientId||activeClients()[0]?.id;
   if(!cid){openClientModal();return}
   const cat=d.category||'Filming';
   const prev=running(S.person);
-  if(prev) await patch('entries',prev.id,{end:Date.now()});
+  if(prev){const same=prev.clientId===cid&&prev.category===cat&&(prev.task||'')===(d.task||'').trim();if(same)await patch('entries',prev.id,{end:Date.now()});else await pauseTimer(S.person)}
+  const pj0=pausedJob(S.person);if(pj0&&(opt&&opt.resume||(pj0.clientId===cid&&pj0.category===cat&&(pj0.task||'')===(d.task||'').trim())))await setPaused(S.person,null);
   const pj=d.projectId&&S.projects[d.projectId]&&S.projects[d.projectId].clientId===cid?d.projectId:'';
   await put('entries',null,{person:S.person,clientId:cid,projectId:pj,category:cat,task:(d.task||'').trim(),start:Date.now(),end:null,billable:BILLABLE_DEFAULT[cat]!==false,created:Date.now()});
-  S.draft.task='';render();toast('Clocked in for '+cname(cid));
+  S.draft.task='';render();toast((opt&&opt.resume?'Back on ':'Clocked in for ')+cname(cid));
 }
 /* small API for the Mac menu bar app: what is running, clock out, resume the last job */
-window.QM={live(){const r=running(S.person);const t=Object.values(S.entries).filter(e=>e.person===S.person&&e.start>=startOfDay(Date.now())).reduce((a,e)=>a+entryH(e),0);return {person:name(S.person),running:r?{since:r.start,client:cname(r.clientId),category:r.category,task:r.task||''}:null,todayHours:t}},
+window.QM={live(){const r=running(S.person);const t=Object.values(S.entries).filter(e=>e.person===S.person&&e.start>=startOfDay(Date.now())).reduce((a,e)=>a+entryH(e),0);return {person:name(S.person),running:r?{since:r.start,client:cname(r.clientId),category:r.category,task:r.task||''}:null,paused:(j=>j?{client:cname(j.clientId),category:j.category,task:j.task||'',at:j.at}:null)(pausedJob(S.person)),todayHours:t}},
   stop(){return stopTimer(S.person)},
-  resume(){const last=Object.values(S.entries).filter(e=>e.person===S.person&&e.end).sort((a,b)=>b.end-a.end)[0];if(!last)return false;S.draft={clientId:last.clientId,category:last.category,task:last.task,projectId:last.projectId};return startTimer(),true},
+  pause(){return pauseTimer(S.person)},
+  resume(){if(pausedJob(S.person))return resumePaused(S.person),true;const last=Object.values(S.entries).filter(e=>e.person===S.person&&e.end).sort((a,b)=>b.end-a.end)[0];if(!last)return false;S.draft={clientId:last.clientId,category:last.category,task:last.task,projectId:last.projectId};return startTimer(),true},
   go(view){S.view=view;render()}};
 async function stopTimer(p){const e=running(p);if(!e)return;await patch('entries',e.id,{end:Date.now()});toast('Clocked out. '+hrs(entryH({...e,end:Date.now()}))+' logged to '+cname(e.clientId))}
 
@@ -865,7 +874,7 @@ function renderLive(){
   let bar=$('#livebar');if(!bar){bar=document.createElement('div');bar.id='livebar';bar.className='livebar';document.body.appendChild(bar)}
   const r=running(S.person);const show=r&&S.view!=='today';
   bar.className='livebar'+(show?' on':'');
-  if(show)bar.innerHTML='<span class="ldot"></span><span class="lt"><b data-since="'+r.start+'">'+elapsed(Date.now()-r.start)+'</b>'+esc(cname(r.clientId))+' · '+esc(r.category)+'</span><button data-act="stop" data-v="'+S.person+'">Clock out</button>';
+  if(show)bar.innerHTML='<span class="ldot"></span><span class="lt"><b data-since="'+r.start+'">'+elapsed(Date.now()-r.start)+'</b>'+esc(cname(r.clientId))+' · '+esc(r.category)+'</span><button data-act="pause" data-v="'+S.person+'" class="ghost" aria-label="Pause">Pause</button><button data-act="stop" data-v="'+S.person+'">Clock out</button>';
 }
 function clientOptions(sel,withNone){
   const cs=activeClients();
@@ -873,6 +882,8 @@ function clientOptions(sel,withNone){
 }
 function catOptions(sel){return CATS.map(c=>'<option '+(sel===c?'selected':'')+'>'+c+'</option>').join('')}
 
+function pausedCard(pid){const j=pausedJob(pid);if(!j)return '';const pj=j.projectId&&S.projects[j.projectId];
+  return '<div class="paused"><div class="pt"><span class="eyebrow">On hold</span><b>'+esc(cname(j.clientId))+' <span class="muted">· '+esc(j.category)+(pj?' · '+esc(pj.title):'')+'</span></b>'+(j.task?'<div class="muted" style="font-size:13px">'+esc(j.task)+'</div>':'')+'<div class="note">Paused '+fmtTime(j.at)+(j.logged?' · '+hrs(j.logged)+' logged so far':'')+'</div></div><div style="display:flex;gap:10px;align-items:center;flex:none"><button class="btn small" data-act="resume" data-v="'+pid+'">Resume</button><button class="link" data-act="unpause" data-v="'+pid+'">Done</button></div></div>'}
 function vToday(){
   const now=Date.now();const d0=startOfDay(now);
   const cards=PEOPLE.map(p=>{
@@ -885,13 +896,13 @@ function vToday(){
       (r.task?'<div class="muted" style="font-size:14px">'+esc(r.task)+'</div>':'')+
       '<div class="big" data-since="'+r.start+'">'+elapsed(now-r.start)+'</div>'+
       (long?'<div class="note" style="color:var(--warn)">This timer has been running for over 10 hours. Did someone forget to clock out?</div>':'')+
-      '<div class="row" style="align-items:center"><button class="btn" data-act="stop" data-v="'+p.id+'" '+('')+'>Clock out</button><span class="note">Started '+fmtTime(r.start)+'</span></div>';
+      '<div class="row" style="align-items:center"><button class="btn" data-act="stop" data-v="'+p.id+'">Clock out</button>'+(mine?'<button class="btn ghost" data-act="pause" data-v="'+p.id+'">Pause</button>':'')+'<span class="note">Started '+fmtTime(r.start)+'</span></div>'+(mine&&pausedJob(p.id)?pausedCard(p.id):'');
     }else if(mine){
-      const d=S.draft;const cs=activeClients();
+      const d=S.draft;const cs=activeClients();const pc=pausedJob(p.id)?pausedCard(p.id):'';
       const seen={};const recent=Object.values(S.entries).filter(e=>e.person===p.id&&e.end&&client(e.clientId)&&!client(e.clientId).archived).sort((a,b)=>b.start-a.start).filter(e=>{const k=e.clientId+'|'+e.category;if(seen[k])return false;seen[k]=1;return true}).slice(0,4);
       const quick=recent.length?'<div><div class="eyebrow" style="margin-bottom:8px">One tap</div><div class="quick">'+recent.map(e=>'<button data-act="quick" data-c="'+e.clientId+'" data-k="'+esc(e.category)+'"><span class="dot" style="background:'+colour(e.clientId)+'"></span><span class="t">'+esc(cname(e.clientId))+'</span><span class="muted">'+esc(e.category)+'</span></button>').join('')+'</div></div>':'';
       body=cs.length?
-      '<div class="big muted">00:00:00</div>'+quick+
+      '<div class="big muted">00:00:00</div>'+pc+quick+
       '<div class="row"><label class="f">Client<select id="d-client" data-draft="clientId">'+clientOptions(d.clientId||cs[0].id)+'</select></label>'+
       '<label class="f">Work<select id="d-cat" data-draft="category">'+catOptions(d.category||'Filming')+'</select></label></div>'+
       (()=>{const ps=activeProjects(d.clientId||cs[0].id).filter(p=>pstatus(p)==='active');return ps.length?'<label class="f">Project<select id="d-project" data-draft="projectId"><option value="">None</option>'+ps.map(p=>'<option value="'+p.id+'" '+(d.projectId===p.id?'selected':'')+'>'+esc(p.title)+'</option>').join('')+'</select></label>':''})()+
@@ -1586,6 +1597,9 @@ document.addEventListener('click',async ev=>{
     case 'person':S.person=v;try{localStorage.setItem('qm-person',v)}catch(e){}render();break;
     case 'start':startTimer();break;
     case 'stop':stopTimer(v);break;
+    case 'pause':pauseTimer(v);break;
+    case 'resume':resumePaused(v);break;
+    case 'unpause':setPaused(v,null);toast('Cleared');break;
     case 'manual':if(!activeClients().length){openClientModal();break}openEntryModal(null,v);break;
     case 'editentry':openEntryModal(v);break;
     case 'newclient':openClientModal();break;
