@@ -1654,7 +1654,7 @@ document.addEventListener('click',async ev=>{
     case 'xeroall':{const invs=Object.values(S.invoices).filter(i=>i.status==='draft');download('xero-drafts-'+dayKey(Date.now())+'.csv',xeroCSV(invs));break}
     case 'period':S.period=v;render();break;
     case 'inswho':S.insWho=v;render();break;
-    case 'backup':download('quiet-media-hours-'+dayKey(Date.now())+'.json',JSON.stringify({exported:new Date().toISOString(),settings:S.settings,clients:S.clients,entries:S.entries,events:S.events,invoices:S.invoices},null,1));break;
+    case 'backup':download('quiet-studio-'+dayKey(Date.now())+'.json',JSON.stringify({exported:new Date().toISOString(),settings:S.settings,clients:S.clients,crew:S.crew,projects:S.projects,entries:S.entries,events:S.events,invoices:S.invoices},null,1));break;
   }
 });
 document.addEventListener('change',ev=>{
