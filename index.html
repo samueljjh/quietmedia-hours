@@ -770,6 +770,11 @@ async function startTimer(){
   await put('entries',null,{person:S.person,clientId:cid,projectId:pj,category:cat,task:(d.task||'').trim(),start:Date.now(),end:null,billable:BILLABLE_DEFAULT[cat]!==false,created:Date.now()});
   S.draft.task='';render();toast('Clocked in for '+cname(cid));
 }
+/* small API for the Mac menu bar app: what is running, clock out, resume the last job */
+window.QM={live(){const r=running(S.person);const t=Object.values(S.entries).filter(e=>e.person===S.person&&e.start>=startOfDay(Date.now())).reduce((a,e)=>a+entryH(e),0);return {person:name(S.person),running:r?{since:r.start,client:cname(r.clientId),category:r.category,task:r.task||''}:null,todayHours:t}},
+  stop(){return stopTimer(S.person)},
+  resume(){const last=Object.values(S.entries).filter(e=>e.person===S.person&&e.end).sort((a,b)=>b.end-a.end)[0];if(!last)return false;S.draft={clientId:last.clientId,category:last.category,task:last.task,projectId:last.projectId};return startTimer(),true},
+  go(view){S.view=view;render()}};
 async function stopTimer(p){const e=running(p);if(!e)return;await patch('entries',e.id,{end:Date.now()});toast('Clocked out. '+hrs(entryH({...e,end:Date.now()}))+' logged to '+cname(e.clientId))}
 
 async function createInvoice(cid){
