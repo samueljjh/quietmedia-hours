@@ -392,7 +392,7 @@ tfoot td{border-bottom:0;font-weight:400}
 .lock{max-width:560px;margin:40px auto;padding:0 4px}
 /* call sheet builder */
 .scrim.wide{padding:0;place-items:stretch}
-.scrim.wide .modal{width:100%;max-width:none;height:100%;max-height:none;border-radius:0;padding:0;display:block;animation:up .3s var(--ease)}
+.scrim.wide .modal{width:100%;max-width:100%;height:100%;max-height:none;border-radius:0;padding:0;display:block;animation:up .3s var(--ease)}
 @media (min-width:900px){.scrim.wide{padding:20px;place-items:center}.scrim.wide .modal{width:min(1240px,100%);height:calc(100% - 40px);border-radius:var(--r-xl);animation:zi .3s var(--ease)}}
 .csb{display:grid;grid-template-rows:auto 1fr auto;height:100%;min-height:0}
 .csb-head{display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px;border-bottom:1px solid var(--line)}
@@ -426,7 +426,7 @@ tfoot td{border-bottom:0;font-weight:400}
 .csb-send{display:flex;flex-wrap:wrap;gap:8px 16px}
 .csb-foot .row{gap:8px}.csb-foot .row>.btn{flex:0 0 auto}
 /* modal & sheet */
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:sc .2s}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:sc .2s}
 @keyframes sc{from{opacity:0}}
 .modal{background:var(--bg);border-radius:var(--r-xl);width:min(560px,100%);max-height:100%;overflow:auto;overflow-x:hidden;padding:24px;display:grid;gap:16px;box-shadow:var(--shadow);animation:zi .3s var(--ease);position:relative;overscroll-behavior:contain}
 .modal-x{position:sticky;top:0;float:right;margin:-8px -8px -40px 0;width:36px;height:36px;border-radius:50%;background:var(--raise);border:0;color:var(--fg);display:grid;place-items:center;z-index:2;justify-self:end}
@@ -434,7 +434,7 @@ tfoot td{border-bottom:0;font-weight:400}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .scrim.sheet{place-items:end center;padding:0}
 .scrim.wide .modal{animation-name:up}
-.scrim.sheet .modal{width:100%;max-width:none;border-radius:22px 22px 0 0;max-height:calc(100% - env(safe-area-inset-top,0px) - 24px);padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s var(--ease)}
+.scrim.sheet .modal{width:100%;max-width:100%;border-radius:22px 22px 0 0;max-height:calc(100% - env(safe-area-inset-top,0px) - 24px);padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s var(--ease)}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
 .scrim.sheet .modal::before{content:'';width:38px;height:4px;border-radius:2px;background:var(--line-strong);margin:0 auto 4px}
 @media (min-width:820px){.scrim.sheet{place-items:stretch end}.scrim.sheet .modal{width:400px;height:100%;max-height:none;border-radius:0;padding:28px 24px;animation:sr .3s var(--ease);align-content:start}.scrim.sheet .modal::before{display:none}}
@@ -605,13 +605,16 @@ function renderSyncDot(){const el=$('#syncDot');if(!el)return;const s=S.sync.sta
 
 /* public availability: dates + free/busy only */
 let availTimer=null;
+const availShown=pid=>{const a=S.settings.availPeople||{};return a[pid]!=null?!!a[pid]:pid==='samuel'};
 function availabilityData(){
   const weeks=+S.settings.availWeeks||12;const t0=startOfDay(Date.now());const days={};
+  const kind=evs=>evs.some(e=>e.type==='Shoot')?'filming':evs.some(e=>e.type==='Edit')?'edit':'busy';
+  const shown=PEOPLE.filter(p=>availShown(p.id));
   for(let i=0;i<weeks*7;i++){const d=addDays(t0,i);const dd=new Date(d);const we=dd.getDay()===0||dd.getDay()===6;
     if(we&&!S.settings.availWeekends){days[dayKey(d)]='off';continue}
-    const busyPeople=PEOPLE.filter(p=>busyOn(d,p.id).length).length;
-    days[dayKey(d)]=busyPeople>=PEOPLE.length?'busy':busyPeople?'limited':'free'}
-  return {updated:Date.now(),email:S.settings.availEmail||'',days};
+    const by={};let n=0;shown.forEach(p=>{const b=busyOn(d,p.id);if(b.length){by[p.id]=kind(b);n++}else by[p.id]='free'});
+    days[dayKey(d)]={s:n>=shown.length?'busy':n?'limited':'free',by}}
+  return {v:2,updated:Date.now(),email:S.settings.availEmail||'',people:shown.map(p=>({id:p.id,name:name(p.id)})),days};
 }
 async function publishAvailability(){
   if(!sb||!ORG||S.settings.availPublish===false)return;
@@ -1050,6 +1053,7 @@ function vSettings(){
   '<p class="note">Each device remembers who is using it. Choose your name at the top of the page on your own computer and phone.</p></section>'+
   '<section class="panel grid"><h3>Public availability page</h3><p class="note">Clients can see which days are free at <b>sheets.quietmedia.co.uk/availability/</b>. Only dates and a free, limited or busy flag are published.</p>'+
   '<div class="row"><label class="f">Publish<select id="s-ap" data-set="availPublish"><option value="1" '+(s.availPublish!==false?'selected':'')+'>On</option><option value="0" '+(s.availPublish===false?'selected':'')+'>Off</option></select></label><label class="f">Weeks ahead<input type="number" id="s-aw" min="2" max="52" data-set="availWeeks" value="'+(s.availWeeks||12)+'"></label><label class="f">Weekends<select id="s-awe" data-set="availWeekends"><option value="0" '+(!s.availWeekends?'selected':'')+'>Not available</option><option value="1" '+(s.availWeekends?'selected':'')+'>Available</option></select></label></div>'+
+  '<div class="row" style="align-items:center"><span class="eyebrow" style="flex:0 0 auto">Shown on the page</span>'+PEOPLE.map(p=>'<label class="chip" style="flex:0 0 auto"><input type="checkbox" data-set="availPeople.'+p.id+'" '+(availShown(p.id)?'checked':'')+'> '+esc(name(p.id))+'</label>').join('')+'</div>'+
   '<div class="row"><label class="f">Enquiry email shown<input type="email" id="s-ae" data-set="availEmail" value="'+esc(s.availEmail||'')+'"></label><label class="f">A day counts as busy from (hrs)<input type="number" id="s-am" min="1" max="12" data-set="availMinHours" value="'+(s.availMinHours||3)+'"></label></div>'+
   '<p class="note">'+(S.avail==='ok'?'Last published '+fmtTime(S.availAt)+'.':S.avail==='noaccess'?'Not published: the GitHub token also needs Contents read and write on quietmedia-hours.':S.avail==='error'?'Not published yet; will retry after the next change.':'Publishes a few seconds after any booking changes.')+' <button class="link" data-act="pubavail">Publish now</button></p></section>'+
   '<section class="panel grid"><h3>Sending to clients and crew</h3><div class="row"><label class="f">Sign messages as<input type="text" id="s-sn" data-set="senderName" value="'+esc(s.senderName||'')+'"></label><label class="f">Reply email<input type="email" id="s-re" data-set="replyEmail" value="'+esc(s.replyEmail||'')+'"></label><label class="f">Reply mobile<input type="tel" id="s-rp" data-set="replyPhone" value="'+esc(s.replyPhone||'')+'"></label>'+PEOPLE.map(p=>'<label class="f">'+esc(name(p.id))+' mobile (for call sheets)<input type="tel" id="s-ph-'+p.id+'" data-set="phones.'+p.id+'" value="'+esc((s.phones||{})[p.id]||'')+'"></label>').join('')+'<label class="f">Chase a pencil after (days)<input type="number" id="s-pd" min="1" data-set="pencilDays" value="'+(s.pencilDays||7)+'"></label></div>'+
@@ -1680,6 +1684,7 @@ document.addEventListener('change',ev=>{
   if(t.dataset.set){const k=t.dataset.set;let val=t.type==='number'?(+t.value||0):t.value;
     if(k==='availPublish'||k==='availWeekends')val=val==='1';
     if(k==='haptics')val=t.checked;
+    if(k.startsWith('availPeople.')){const p=k.split('.')[1];saveSettings({availPeople:{...(S.settings.availPeople||{}),[p]:t.checked}})}else
     if(k.startsWith('phones.')){const p=k.split('.')[1];saveSettings({phones:{...(S.settings.phones||{}),[p]:val}})}else
     if(k.startsWith('names.')){const p=k.split('.')[1];saveSettings({names:{...S.settings.names,[p]:val||PEOPLE.find(x=>x.id===p).def}})}else saveSettings({[k]:val})}
 });
