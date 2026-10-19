@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Quiet Media Hours</title>
 <meta name="description" content="Hours, bookings and invoicing for Quiet Media.">
 <meta name="robots" content="noindex,nofollow">
@@ -103,6 +103,7 @@ nav.tabs svg{display:none}
   .modal{padding:20px;max-height:calc(100% - 16px)}
 }
 @media (pointer:coarse){
+  input,select,textarea{font-size:16px!important}
   .btn,.seg button,.link,.iconbtn,.swatches button{min-height:44px}
   .seg button{height:40px}
   .swatches button{min-width:44px}
@@ -392,7 +393,8 @@ tfoot td{border-bottom:0;font-weight:400}
 .scrim.wide .modal{width:100%;max-width:none;height:100%;max-height:none;border-radius:0;padding:0;display:block;animation:up .3s var(--ease)}
 @media (min-width:900px){.scrim.wide{padding:20px;place-items:center}.scrim.wide .modal{width:min(1240px,100%);height:calc(100% - 40px);border-radius:var(--r-xl);animation:zi .3s var(--ease)}}
 .csb{display:grid;grid-template-rows:auto 1fr auto;height:100%;min-height:0}
-.csb-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.csb-head{display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px;border-bottom:1px solid var(--line)}
+@media (min-width:900px){.csb-head{padding-top:14px}}
 .csb-head h2{font-size:20px}.csb-head .note{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .csb-head>div:first-child{flex:1;min-width:0}
 .csb-body{display:grid;grid-template-columns:minmax(0,1fr);min-height:0;overflow:hidden}
@@ -411,19 +413,22 @@ tfoot td{border-bottom:0;font-weight:400}
 .csb-crew.off b,.csb-crew.off input{opacity:.5}
 .csb-crew b{font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .csb-crew input[type=text],.csb-crew input[type=tel],.csb-crew input[type=time],.csb-row input{min-height:38px;padding:6px 10px;font-size:14px}
+@media (pointer:coarse){.csb-crew input,.csb-row input{min-height:44px}}
 .csb-full{grid-column:1/-1}
 @media (max-width:520px){.csb-crew{grid-template-columns:auto minmax(0,1fr) 36px}.csb-crew input[type=time],.csb-crew input[type=tel]{grid-column:2}.csb-row{grid-template-columns:96px 1fr 36px}}
 .csb-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg)}
 .csb-send{display:flex;flex-wrap:wrap;gap:8px 16px}
 .csb-foot .row{gap:8px}.csb-foot .row>.btn{flex:0 0 auto}
 /* modal & sheet */
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:grid;place-items:center;padding:16px;animation:sc .2s}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:sc .2s}
 @keyframes sc{from{opacity:0}}
-.modal{background:var(--bg);border-radius:var(--r-xl);width:min(560px,100%);max-height:calc(100% - 32px);overflow:auto;padding:24px;display:grid;gap:16px;box-shadow:var(--shadow);animation:zi .3s var(--ease)}
+.modal{background:var(--bg);border-radius:var(--r-xl);width:min(560px,100%);max-height:100%;overflow:auto;overflow-x:hidden;padding:24px;display:grid;gap:16px;box-shadow:var(--shadow);animation:zi .3s var(--ease);position:relative;overscroll-behavior:contain}
+.modal-x{position:sticky;top:0;float:right;margin:-8px -8px -40px 0;width:36px;height:36px;border-radius:50%;background:var(--raise);border:0;color:var(--fg);display:grid;place-items:center;z-index:2;justify-self:end}
+.modal-x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .scrim.sheet{place-items:end center;padding:0}
 .scrim.wide .modal{animation-name:up}
-.scrim.sheet .modal{width:100%;max-width:none;border-radius:22px 22px 0 0;max-height:88%;padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s var(--ease)}
+.scrim.sheet .modal{width:100%;max-width:none;border-radius:22px 22px 0 0;max-height:calc(100% - env(safe-area-inset-top,0px) - 24px);padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s var(--ease)}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
 .scrim.sheet .modal::before{content:'';width:38px;height:4px;border-radius:2px;background:var(--line-strong);margin:0 auto 4px}
 @media (min-width:820px){.scrim.sheet{place-items:stretch end}.scrim.sheet .modal{width:400px;height:100%;max-height:none;border-radius:0;padding:28px 24px;animation:sr .3s var(--ease);align-content:start}.scrim.sheet .modal::before{display:none}}
@@ -1080,7 +1085,7 @@ function vSettings(){
 function renderModal(){
   const m=S.modal;const root=$('#modalRoot');
   if(!m){root.innerHTML='';return}
-  root.innerHTML='<div class="scrim'+(m.cls?' '+m.cls:'')+'" data-act="closemodal"><div class="modal" role="dialog" aria-modal="true">'+m.html()+'</div></div>';
+  root.innerHTML='<div class="scrim'+(m.cls?' '+m.cls:'')+'" data-act="closemodal"><div class="modal" role="dialog" aria-modal="true">'+(m.cls?'':'<button class="modal-x" data-act="closemodal" aria-label="Close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>')+m.html()+'</div></div>';
   const f=m.cls?null:root.querySelector('input,select');if(f)f.focus();
   if(m.type==='event'){feeNote();availNote()}
 }
@@ -1246,7 +1251,7 @@ function vSchedule(){
     '<div class="who"><span>'+(who==='all'?'Both of us':esc(name(who))+' only')+'</span>'+PEOPLE.map(p=>'<button class="av" data-act="calwho" data-v="'+p.id+'" aria-pressed="'+(who===p.id)+'" title="'+esc(name(p.id))+'">'+esc(name(p.id).slice(0,1))+'</button>').join('')+'</div></div>'+
     '<div class="stage '+anim+'" id="calstage" style="'+(S.calFrom?'--zfrom:'+S.calFrom:'')+'">'+body+'</div>'+
     '<p class="calhint ph">Pinch to zoom between year, month, week and day. Swipe sideways to move. Tap a day twice to open it.</p><p class="calhint dk">Pinch the trackpad or ⌘‑scroll to zoom. Scroll sideways or use ← → to move, ↑ ↓ to zoom, T for today, N for a new booking.</p>'+
-    '<button class="fab" data-act="newevent" '+(L!=='year'?'data-v="'+dayKey(startOfDay(S.cal.cursor))+'"':'')+' aria-label="New booking"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>';
+    '<button class="fab" data-act="newevent" '+(L==='day'||(L!=='year'&&S.cal.sel)?'data-v="'+dayKey(startOfDay(S.cal.cursor))+'"':'')+' aria-label="New booking"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>';
 }
 function calZoom(dir){const i=CAL_LEVELS.indexOf(calMode())+dir;if(i<0||i>3)return false;S.cal.mode=CAL_LEVELS[i];S.calAnim=dir>0?'zi':'zo';try{localStorage.setItem('qm-calmode',S.cal.mode)}catch(e){}render();return true}
 function calMove(n){const C=S.cal;const L=calMode();C.cursor=L==='year'?new Date(new Date(C.cursor).getFullYear()+n,new Date(C.cursor).getMonth(),1).getTime():L==='month'?addMonths(C.cursor,n):L==='week'?addDays(C.cursor,7*n):addDays(C.cursor,n);C.sel=startOfDay(C.cursor);S.calAnim=n>0?'sl':'sr';render()}
@@ -1382,7 +1387,7 @@ function openEventModal(evid,date,startAt,presetClient){
   const ev=evid?S.events[evid]:null;const t=ms=>fmtTime(ms);
   const day0=ev?startOfDay(ev.start):parseLocal(date||dayKey(Date.now()),'00:00');
   const crewSel={};(ev?ev.crew||[]:[]).forEach(x=>crewSel[x.id]=x);
-  S.modal={type:'event',evid:evid||null,days:[day0],calMonth:day0,crewSel,html:()=>'<h2>'+(ev?'Edit booking':'New booking')+'</h2>'+
+  S.modal={type:'event',evid:evid||null,days:(ev||date)?[day0]:[],calMonth:day0,crewSel,html:()=>'<h2>'+(ev?'Edit booking':'New booking')+'</h2>'+
     '<div class="row"><label class="f">Client<select id="v-client">'+clientOptions(ev?ev.clientId:(presetClient||''),true)+'</select></label><label class="f">Type<select id="v-type">'+EVTYPES.map(x=>'<option '+(ev&&ev.type===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
     '<div id="v-projwrap"><label class="f">Project<select id="v-project">'+projectOptions(ev?ev.clientId:(presetClient||''),ev?ev.projectId:(S.presetProject||''))+'</select></label><p class="note" id="v-projnote" style="margin:-8px 0 0"></p></div><div id="v-retwrap" hidden></div>'+
     '<label class="f">Title <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span><input type="text" id="v-title" value="'+esc(ev?ev.title:'')+'" placeholder="Leave blank to use the client or project name"></label>'+
