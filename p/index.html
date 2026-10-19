@@ -65,7 +65,7 @@ ul.crew{list-style:none;display:grid;gap:6px}ul.crew li{display:flex;justify-con
   const dayEl=d=>{const dt=new Date(d.date);return '<div class="day"><div class="d"><b>'+dt.getDate()+'</b><small>'+dt.toLocaleDateString('en-GB',{weekday:'short',month:'short'})+'</small></div><div class="t"><b>'+(data.kind==='crew'&&d.call?'Call '+esc(d.call):esc(d.start)+' – '+esc(d.end))+'</b><span>'+(data.kind==='crew'&&d.call?'Working '+esc(d.start)+' – '+esc(d.end)+'. ':'')+esc(d.type==='Shoot'?'Filming':d.type)+(d.location?' · '+esc(d.location):'')+'</span></div></div>'};
   const contact='<p class="contact">'+(data.replyPhone?'Call or text <b>'+esc(data.replyPhone)+'</b>. ':'')+(data.replyEmail?'Email <b>'+esc(data.replyEmail)+'</b>.':'')+'</p>';
   const dates=data.days.map(d=>new Date(d.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})).join(', ');
-  if(data.kind==='crew'&&data.v>=2){document.querySelector('.brand').remove();app.innerHTML=QMSheet.render(data);QMSheet.weather(app,data);}
+  if(data.kind==='crew'&&data.v>=2){document.querySelector('.brand').remove();app.innerHTML=QMSheet.render({...data,ref:id});QMSheet.mount(app,{...data,ref:id});}
   else if(data.kind==='crew'){
     const body=encodeURIComponent('Confirmed for '+data.title+' on '+dates+'. – ');
     app.innerHTML='<div class="eyebrow">Call sheet</div><h1>'+esc(data.title)+'</h1><p class="lead">'+esc(data.client?data.client+' · ':'')+esc(data.type==='Shoot'?'Filming':data.type)+(data.days.length>1?' · '+data.days.length+' days':'')+'</p>'+
