@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<title>Quiet Media Hours</title>
+<title>Quiet Studio</title>
 <meta name="description" content="Hours, bookings and invoicing for Quiet Media.">
 <meta name="robots" content="noindex,nofollow">
 <link rel="manifest" href="manifest.webmanifest">
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="QM Hours">
+<meta name="apple-mobile-web-app-title" content="Studio">
 <meta name="theme-color" content="#0A0A0A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap">
@@ -456,6 +456,7 @@ hr.s{border:0;border-top:1px solid var(--line);margin:4px 0}
 .note{font-size:12px;color:var(--muted)}
 </style>
 <style>[hidden]{display:none!important}html,body{height:100%}body{padding-top:env(safe-area-inset-top,0px)}</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
 <script src="p/sheet.js"></script>
 <script>document.head.insertAdjacentHTML('beforeend','<style>'+QMSheet.css+'.cs{--cs-inv:var(--bg);--cs-muted:var(--muted);--cs-line:var(--line-strong)}</style>')</script>
 </head>
@@ -464,7 +465,7 @@ hr.s{border:0;border-top:1px solid var(--line);margin:4px 0}
   <header class="top">
     <div class="brand">
       <svg viewBox="0 0 400 400" aria-hidden="true"><path d="M 296.555 343.549 A 173 173 0 1 1 343.549 296.555 L 302.822 255.828 A 117 117 0 1 0 255.828 302.822 L 296.555 343.549 Z" fill="currentColor"/></svg>
-      <b>quiet media</b><span>Hours</span>
+      <b>quiet media</b><span>Studio</span>
     </div>
     <div class="seg" id="personSeg" role="group" aria-label="Who is using this device"></div>
     <span id="syncDot" class="syncdot idle" title="Not synced"></span><button class="iconbtn" id="themeBtn" aria-label="Switch light or dark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11" /><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg></button>
@@ -521,88 +522,82 @@ const activeClients=()=>Object.values(S.clients).filter(c=>!c.archived).sort((a,
 
 function toast(msg){const r=$('#toastRoot');r.innerHTML='<div class="toast" role="status">'+esc(msg)+'</div>';clearTimeout(toast.t);toast.t=setTimeout(()=>r.innerHTML='',2600)}
 
-/* ---------- data layer: end-to-end encrypted, synced through a private GitHub repo ----------
-   Every collection is one file, data/<col>.json, holding {v, iv, ct}: AES-GCM-256 ciphertext.
-   The key comes from the shared passphrase via PBKDF2 (salt stored in plain text in meta.json).
-   GitHub only ever sees ciphertext. Each device caches the ciphertext locally so the app opens offline. */
+/* ---------- data layer: Supabase (Postgres, row-level security, realtime) with a local cache so the app opens offline ----------
+   Every record is a row in `records` (org, collection, id, JSON, updated_at). Newest write wins. Deletes are tombstones.
+   Sign-in is email + password; only invited emails can create an account. */
+const SB_URL='https://jxfnzlwwsvfcrstxpgzr.supabase.co';
+const SB_KEY='sb_publishable_tQiBC9EehadDkCdVhsqzUQ__7FfYpEV';
+const SHEETS_HOST='https://sheets.quietmedia.co.uk';
+const ORG_SLUG='quiet-media';
 const COLS=['clients','crew','projects','entries','invoices','events','settings'];
-const DEAD={};            // tombstones per collection: {id: deletedAt}
-const SHA={};             // last known file sha per collection
-const DIRTY={};           // collections with unsaved local changes
-const CFG_KEY='qm-cfg';
-let KEY=null, cfg=null, pushTimer=null, pollTimer=null, pushing=false;
-S.sync={state:'idle',last:0,err:''};
-
-const enc=new TextEncoder(),dec=new TextDecoder();
-const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
-const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-async function deriveKey(pass,salt){
-  const base=await crypto.subtle.importKey('raw',enc.encode(pass),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt:unb64(salt),iterations:310000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+const DEAD={};            // local tombstones per collection: {id: deletedAt}
+const DIRTY={};           // records changed on this device and not yet saved: {col:{id:true}}
+let sb=null, ORG=null, pushTimer=null, pollTimer=null, pushing=false, SINCE=0, chan=null;
+S.sync={state:'idle',last:0,err:''};S.user=null;
+const CACHE_KEY='qm-db';
+function cacheLoad(){try{return JSON.parse(localStorage.getItem(CACHE_KEY)||'null')}catch(e){return null}}
+let cacheTimer=null;
+function cacheSave(){clearTimeout(cacheTimer);cacheTimer=setTimeout(()=>{try{const cols={};COLS.forEach(c=>{cols[c]=c==='settings'?{app:S.settings}:S[c]});localStorage.setItem(CACHE_KEY,JSON.stringify({org:ORG,user:S.user,since:SINCE,cols,dead:DEAD,dirty:DIRTY}))}catch(e){}},150)}
+function applyRow(r){
+  const col=r.col,id=r.id;if(!COLS.includes(col))return;
+  const local=col==='settings'?S.settings:S[col][id];const localU=local?(local._u||0):0;
+  const dirty=DIRTY[col]&&DIRTY[col][id];
+  if(dirty&&localU>r.updated_at)return;                      // our unsaved change is newer; it will push
+  if(r.deleted_at){if(col==='settings')return;delete S[col][id];(DEAD[col]=DEAD[col]||{})[id]=r.deleted_at;if(DIRTY[col])delete DIRTY[col][id];return}
+  if(DEAD[col]&&DEAD[col][id]&&DEAD[col][id]>=r.updated_at)return;
+  if(col==='settings'){S.settings={...DEF_SETTINGS,...r.data,_u:r.updated_at}}else{S[col][id]={...r.data,id,_u:r.updated_at};if(DEAD[col])delete DEAD[col][id]}
+  if(DIRTY[col])delete DIRTY[col][id];
 }
-async function encrypt(obj){const iv=crypto.getRandomValues(new Uint8Array(12));const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},KEY,enc.encode(JSON.stringify(obj)));return {v:1,iv:b64(iv),ct:b64(ct)}}
-async function decrypt(blob){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},KEY,unb64(blob.ct));return JSON.parse(dec.decode(pt))}
-
-function loadCfg(){try{cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch(e){cfg=null}return cfg}
-function saveCfg(c){cfg=c;try{localStorage.setItem(CFG_KEY,JSON.stringify(c))}catch(e){}}
-function cacheGet(col){try{return JSON.parse(localStorage.getItem('qm-cache-'+col)||'null')}catch(e){return null}}
-function cacheSet(col,v){try{localStorage.setItem('qm-cache-'+col,JSON.stringify(v))}catch(e){}}
-
-/* GitHub contents API */
-const GH='https://api.github.com';
-function ghHeaders(){return {Authorization:'Bearer '+cfg.token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}}
-async function ghGet(path,etag,repo){
-  const h=ghHeaders();if(etag)h['If-None-Match']=etag;
-  const r=await fetch(GH+'/repos/'+cfg.owner+'/'+(repo||cfg.repo)+'/contents/'+path+'?ref=main&_='+Date.now(),{headers:h,cache:'no-store'});
-  if(r.status===304)return {unchanged:true};
-  if(r.status===404)return {missing:true};
-  if(r.status===401||r.status===403)throw Object.assign(new Error('auth'),{code:'auth'});
-  if(!r.ok)throw new Error('GitHub '+r.status);
-  const j=await r.json();
-  return {sha:j.sha,etag:r.headers.get('etag'),json:JSON.parse(dec.decode(unb64(j.content.replace(/\n/g,''))))};
+async function pull(){
+  if(!sb||!ORG)return false;let got=0;
+  for(let page=0;page<50;page++){
+    const {data,error}=await sb.from('records').select('col,id,data,updated_at,deleted_at').eq('org_id',ORG).gt('updated_at',SINCE).order('updated_at',{ascending:true}).limit(1000);
+    if(error)throw error;if(!data||!data.length)break;
+    data.forEach(r=>{applyRow(r);if(r.updated_at>SINCE)SINCE=r.updated_at});got+=data.length;if(data.length<1000)break;
+  }
+  if(got){cacheSave();render()}return got>0;
 }
-async function ghPut(path,obj,sha,message,repo){
-  const body={message,content:b64(enc.encode(JSON.stringify(obj))),branch:'main'};if(sha)body.sha=sha;
-  const r=await fetch(GH+'/repos/'+cfg.owner+'/'+(repo||cfg.repo)+'/contents/'+path,{method:'PUT',headers:{...ghHeaders(),'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(r.status===409||r.status===422)return {conflict:true};
-  if(r.status===401||r.status===403)throw Object.assign(new Error('auth'),{code:'auth'});
-  if(!r.ok)throw new Error('GitHub '+r.status);
-  const j=await r.json();return {sha:j.content.sha};
+function dirtyRows(){
+  const rows=[];
+  for(const col of COLS){const ids=Object.keys(DIRTY[col]||{});for(const id of ids){
+    if(col==='settings'){rows.push({org_id:ORG,col,id:'app',data:stripMeta(S.settings),updated_at:S.settings._u||Date.now(),deleted_at:null});continue}
+    const d=S[col][id];
+    if(d)rows.push({org_id:ORG,col,id,data:stripMeta(d),updated_at:d._u||Date.now(),deleted_at:null});
+    else if(DEAD[col]&&DEAD[col][id])rows.push({org_id:ORG,col,id,data:{},updated_at:DEAD[col][id],deleted_at:DEAD[col][id]});
+  }}
+  return rows;
 }
-
-/* merge two collection files {docs, dead}: newest _u wins; tombstones beat older docs */
-function mergeCol(a,b){
-  const docs={},dead={};
-  for(const src of [a,b]){if(!src)continue;
-    for(const [id,d] of Object.entries(src.docs||{})){if(!docs[id]||(d._u||0)>(docs[id]._u||0))docs[id]=d}
-    for(const [id,t] of Object.entries(src.dead||{})){if(!dead[id]||t>dead[id])dead[id]=t}}
-  for(const id of Object.keys(dead)){if(docs[id]&&(docs[id]._u||0)<=dead[id])delete docs[id]}
-  const cut=Date.now()-120*864e5;for(const id of Object.keys(dead)){if(dead[id]<cut)delete dead[id]}
-  return {docs,dead};
+function stripMeta(o){const c={...o};delete c.id;delete c._u;return c}
+async function push(){
+  const rows=dirtyRows();if(!rows.length)return;
+  for(let i=0;i<rows.length;i+=200){const chunk=rows.slice(i,i+200);const {error}=await sb.rpc('upsert_records',{rows:chunk});if(error)throw error;
+    chunk.forEach(r=>{if(DIRTY[r.col])delete DIRTY[r.col][r.id]})}
+  cacheSave();
+  if(rows.some(r=>r.col==='events'||r.col==='settings'))scheduleAvailability();
 }
-function localFile(col){
-  if(col==='settings')return {docs:{app:S.settings},dead:{}};
-  const docs={};for(const [id,d] of Object.entries(S[col]))docs[id]={...d,id};
-  return {docs,dead:DEAD[col]||{}};
+async function syncAll(){
+  if(!sb||!ORG||pushing)return;pushing=true;S.sync.state='syncing';renderSyncDot();
+  try{await push();await pull();S.sync.state='ok';S.sync.last=Date.now();S.sync.err='';S.loaded.all=true}
+  catch(e){S.sync.state=navigator.onLine?'error':'offline';S.sync.err=(e&&e.message)||'Sync failed';console.warn('sync',e)}
+  pushing=false;renderSyncDot();render();
 }
-function applyFile(col,f){
-  DEAD[col]=f.dead||{};
-  if(col==='settings'){S.settings={...DEF_SETTINGS,...(f.docs.app||{})};return}
-  const o={};for(const [id,d] of Object.entries(f.docs||{}))o[id]={...d,id};S[col]=o;
+function schedulePush(){clearTimeout(pushTimer);pushTimer=setTimeout(syncAll,600)}
+function subscribeRealtime(){
+  if(chan){try{sb.removeChannel(chan)}catch(e){}}
+  chan=sb.channel('records-'+ORG).on('postgres_changes',{event:'*',schema:'public',table:'records',filter:'org_id=eq.'+ORG},p=>{const r=p.new&&p.new.id?p.new:null;if(!r)return;applyRow(r);if(r.updated_at>SINCE)SINCE=r.updated_at;cacheSave();if(!S.modal||S.modal.type==='evsheet')render()}).subscribe();
 }
 
-async function pull(col,force){
-  const c=cacheGet(col);
-  const r=await ghGet('data/'+col+'.json',force?null:(c&&c.etag));
-  if(r.unchanged)return false;
-  if(r.missing){SHA[col]=null;return false}
-  const remote=await decrypt(r.json);
-  const merged=DIRTY[col]?mergeCol(remote,localFile(col)):remote;
-  applyFile(col,merged);SHA[col]=r.sha;
-  cacheSet(col,{etag:r.etag,sha:r.sha,blob:r.json});
-  return true;
-}
-/* public availability: dates + free/busy only, written to the public site repo */
+/* write API used by the views */
+function touch(col,id,data){S[col][id]={...data,id,_u:Date.now()};(DIRTY[col]=DIRTY[col]||{})[id]=true;cacheSave();render();schedulePush();return id}
+async function put(col,id,data){return touch(col,id||uid(),data)}
+async function patch(col,id,data){return touch(col,id,{...S[col][id],...data})}
+async function remove(col,id){delete S[col][id];(DEAD[col]=DEAD[col]||{})[id]=Date.now();(DIRTY[col]=DIRTY[col]||{})[id]=true;cacheSave();render();schedulePush()}
+async function saveSettings(data){S.settings={...S.settings,...data,_u:Date.now()};(DIRTY.settings=DIRTY.settings||{}).app=true;cacheSave();render();schedulePush()}
+function stripId(o){const c={...o};delete c.id;return c}
+function banner(msg,cls){$('#banner').innerHTML=msg?'<div class="banner '+(cls||'')+'">'+msg+'</div>':''}
+function renderSyncDot(){const el=$('#syncDot');if(!el)return;const s=S.sync.state;el.className='syncdot '+s;el.title=s==='ok'?'Synced '+fmtTime(S.sync.last):s==='syncing'?'Syncing':s==='offline'?'Offline, changes saved on this device':S.sync.err||s}
+
+/* public availability: dates + free/busy only */
 let availTimer=null;
 function availabilityData(){
   const weeks=+S.settings.availWeeks||12;const t0=startOfDay(Date.now());const days={};
@@ -613,75 +608,43 @@ function availabilityData(){
   return {updated:Date.now(),email:S.settings.availEmail||'',days};
 }
 async function publishAvailability(){
-  if(!cfg||!KEY||S.settings.availPublish===false)return;
-  const siteRepo=cfg.siteRepo||'quietmedia-hours';const path='availability.json';const data=availabilityData();
-  try{
-    let sha=null;try{const r=await ghGet(path,null,siteRepo);if(!r.missing)sha=r.sha;if(r.json&&JSON.stringify(r.json.days)===JSON.stringify(data.days)&&r.json.email===data.email)return}catch(e){}
-    const r=await ghPut(path,data,sha,'Update availability',siteRepo);
-    if(r.conflict){S.avail='conflict'}else{S.avail='ok';S.availAt=Date.now()}
-  }catch(e){S.avail=e.code==='auth'?'noaccess':'error'}
+  if(!sb||!ORG||S.settings.availPublish===false)return;
+  try{const {error}=await sb.from('availability').upsert({org_id:ORG,slug:ORG_SLUG,data:availabilityData(),updated_at:new Date().toISOString()});if(error)throw error;S.avail='ok';S.availAt=Date.now()}
+  catch(e){S.avail='error'}
 }
 function scheduleAvailability(){clearTimeout(availTimer);availTimer=setTimeout(publishAvailability,4000)}
-async function push(col){
-  if(cfg&&cfg.repo===(cfg.siteRepo||'quietmedia-hours')){S.sync.state='error';S.sync.err='Data repo is set to the website repo. Fix it in Settings.';renderSyncDot();return}
-  for(let i=0;i<4;i++){
-    const file=localFile(col);const blob=await encrypt(file);
-    const r=await ghPut('data/'+col+'.json',blob,SHA[col],'Update '+col);
-    if(!r.conflict){SHA[col]=r.sha;cacheSet(col,{etag:null,sha:r.sha,blob});delete DIRTY[col];if(col==='events'||col==='settings')scheduleAvailability();return}
-    await pull(col,true); // merges remote into local, then retry
-  }
-  throw new Error('Could not save '+col+' after several attempts');
-}
-async function syncAll(){
-  if(!KEY||!cfg||pushing)return;pushing=true;S.sync.state='syncing';renderSyncDot();
-  try{
-    for(const col of COLS){if(DIRTY[col])await push(col);else await pull(col)}
-    S.sync.state='ok';S.sync.last=Date.now();S.sync.err='';S.loaded.all=true;
-  }catch(e){
-    S.sync.state=navigator.onLine?'error':'offline';S.sync.err=e.code==='auth'?'GitHub rejected the token. Open Settings and enter a new one.':(e.message||'Sync failed');
-  }
-  pushing=false;renderSyncDot();render();
-}
-function schedulePush(){clearTimeout(pushTimer);pushTimer=setTimeout(syncAll,700)}
 
-/* write API used by the views */
-function touch(col,id,data){S[col][id]={...data,id,_u:Date.now()};DIRTY[col]=true;cacheLocalFile(col);render();schedulePush();return id}
-async function put(col,id,data){return touch(col,id||uid(),data)}
-async function patch(col,id,data){return touch(col,id,{...S[col][id],...data})}
-async function remove(col,id){delete S[col][id];(DEAD[col]=DEAD[col]||{})[id]=Date.now();DIRTY[col]=true;cacheLocalFile(col);render();schedulePush()}
-async function saveSettings(data){S.settings={...S.settings,...data,_u:Date.now()};DIRTY.settings=true;cacheLocalFile('settings');render();schedulePush()}
-async function cacheLocalFile(col){if(!KEY)return;try{const blob=await encrypt(localFile(col));const c=cacheGet(col)||{};cacheSet(col,{...c,blob,dirty:true})}catch(e){}}
-function stripId(o){const c={...o};delete c.id;return c}
-function banner(msg,cls){$('#banner').innerHTML=msg?'<div class="banner '+(cls||'')+'">'+msg+'</div>':''}
-function renderSyncDot(){const el=$('#syncDot');if(!el)return;const s=S.sync.state;el.className='syncdot '+s;el.title=s==='ok'?'Synced '+fmtTime(S.sync.last):s==='syncing'?'Syncing':s==='offline'?'Offline, changes saved on this device':S.sync.err||s}
-
-/* unlock: derive key, verify against meta.json, load cache, then sync */
-async function unlock(c){
-  cfg=c;
-  let meta;
-  try{const r=await ghGet('meta.json');if(r.missing){meta=null}else meta=r.json}
-  catch(e){ if(e.code==='auth')throw new Error('GitHub rejected that token. Check it has Contents read and write on '+c.repo+'.'); const m=cacheGet('meta');if(!m)throw new Error('Could not reach GitHub, and nothing is cached on this device yet. Connect to the internet for first setup.');meta=m }
-  if(!meta){
-    const salt=b64(crypto.getRandomValues(new Uint8Array(16)));KEY=await deriveKey(c.pass,salt);
-    meta={v:1,kdf:'PBKDF2-SHA256-310000',salt,check:await encrypt({ok:true}),created:Date.now()};
-    await ghPut('meta.json',meta,null,'Initialise Quiet Media Hours');
-  }else{
-    KEY=await deriveKey(c.pass,meta.salt);
-    try{await decrypt(meta.check)}catch(e){KEY=null;throw new Error('That passphrase is not the one this data was set up with.')}
-  }
-  cacheSet('meta',meta);saveCfg(c);S.locked=false;
-  for(const col of COLS){const cc=cacheGet(col);if(cc&&cc.blob){try{applyFile(col,await decrypt(cc.blob));SHA[col]=cc.sha;if(cc.dirty)DIRTY[col]=true}catch(e){}}}
-  render();await syncAll();
-  clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==='visible')syncAll()},30000);
+/* session */
+async function loadOrg(){
+  const {data,error}=await sb.from('members').select('org_id, orgs(name,slug)').limit(1);
+  if(error)throw error;if(!data||!data.length)throw new Error('Your account is not a member of a studio yet. Ask to be invited.');
+  ORG=data[0].org_id;
 }
-function lockDevice(){KEY=null;S.locked=true;if(cfg){saveCfg({...cfg,pass:''})}clearInterval(pollTimer);render()}
-function signOut(){KEY=null;S.locked=true;clearInterval(pollTimer);try{localStorage.removeItem(CFG_KEY);COLS.concat(['meta']).forEach(c=>localStorage.removeItem('qm-cache-'+c))}catch(e){}COLS.forEach(c=>{if(c!=='settings')S[c]={}});S.settings={...DEF_SETTINGS};render()}
+async function startSession(session){
+  S.user={id:session.user.id,email:session.user.email};S.locked=false;S.unlockErr='';
+  const c=cacheLoad();
+  if(c&&c.user&&c.user.id===session.user.id&&c.org){ORG=c.org;SINCE=c.since||0;COLS.forEach(col=>{if(col==='settings')S.settings={...DEF_SETTINGS,...(c.cols.settings&&c.cols.settings.app||{})};else S[col]=c.cols[col]||{}});Object.assign(DEAD,c.dead||{});Object.assign(DIRTY,c.dirty||{})}
+  render();
+  try{if(!ORG)await loadOrg();subscribeRealtime();await syncAll()}
+  catch(e){S.sync.state='error';S.sync.err=e.message||'Could not load';renderSyncDot();if(!ORG){S.locked=true;S.unlockErr=e.message;await sb.auth.signOut();render()}}
+  clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==='visible')syncAll()},60000);
+}
+function clearLocal(){COLS.forEach(c=>{if(c!=='settings')S[c]={}});S.settings={...DEF_SETTINGS};for(const k of Object.keys(DEAD))delete DEAD[k];for(const k of Object.keys(DIRTY))delete DIRTY[k];ORG=null;SINCE=0;S.user=null;try{localStorage.removeItem(CACHE_KEY)}catch(e){}}
+async function signOut(){clearInterval(pollTimer);if(chan){try{sb.removeChannel(chan)}catch(e){}chan=null}try{await sb.auth.signOut()}catch(e){}clearLocal();S.locked=true;render()}
+function lockDevice(){signOut()}
+async function signIn(email,pass){const {error}=await sb.auth.signInWithPassword({email,password:pass});if(error)throw new Error(error.message==='Invalid login credentials'?'Wrong email or password.':error.message)}
+async function signUp(email,pass){const {data,error}=await sb.auth.signUp({email,password:pass});if(error)throw new Error(error.message.replace('Database error saving new user','This email has not been invited.'));if(data.user&&!data.session)return 'Check your email to confirm the account, then sign in.';return ''}
+async function resetPassword(email){const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw new Error(error.message);return 'Reset link sent. Open it on this device.'}
+async function setPassword(pass){const {error}=await sb.auth.updateUser({password:pass});if(error)throw new Error(error.message);S.recovery=false;toast('Password set')}
+async function invite(email){const {error}=await sb.from('invites').upsert({email:email.toLowerCase(),org_id:ORG,role:'owner'});if(error)throw new Error(error.message)}
 
 async function boot(){
   S.locked=true;render();
-  if(!window.isSecureContext||!crypto.subtle){banner('This page must be opened over https for encryption to work.','warn');return}
-  const c=loadCfg();
-  if(c&&c.token&&c.pass){try{await unlock(c)}catch(e){S.locked=true;S.unlockErr=e.message;render()}}
+  if(!window.supabase){banner('Could not load the database library. Check the connection and reload.','warn');return}
+  sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  sb.auth.onAuthStateChange((ev,session)=>{if(ev==='PASSWORD_RECOVERY'){S.recovery=true;S.locked=true;render()}});
+  const {data:{session}}=await sb.auth.getSession();
+  if(session&&!S.recovery)await startSession(session);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncAll()});
   window.addEventListener('online',syncAll);
   if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});let had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)toast('App updated')})}
@@ -695,9 +658,9 @@ async function download(filename,data){
 async function importBackup(file){
   const txt=await file.text();let j;try{j=JSON.parse(txt)}catch(e){toast('That file is not a backup from this app.');return}
   let n=0;
-  for(const col of ['clients','entries','events','invoices']){for(const [id,d] of Object.entries(j[col]||{})){if(!S[col][id]){S[col][id]={...d,id,_u:d._u||Date.now()};n++}}DIRTY[col]=true}
-  if(j.settings){S.settings={...DEF_SETTINGS,...j.settings,_u:Date.now()};DIRTY.settings=true}
-  render();await syncAll();toast('Imported '+n+' records');
+  for(const col of ['clients','crew','projects','entries','events','invoices']){for(const [id,d] of Object.entries(j[col]||{})){if(!S[col][id]){S[col][id]={...d,id,_u:d._u||Date.now()};(DIRTY[col]=DIRTY[col]||{})[id]=true;n++}}}
+  if(j.settings){S.settings={...DEF_SETTINGS,...j.settings,_u:Date.now()};(DIRTY.settings=DIRTY.settings||{}).app=true}
+  cacheSave();render();await syncAll();toast('Imported '+n+' records');
 }
 
 /* ---------- valuation ---------- */
@@ -843,7 +806,7 @@ function icsFor(ev){
   const e=t=>String(t||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/[,;]/g,m=>'\\'+m);
   const who=(ev.people||[]).map(name).join(' & ');
   const desc=[cname(ev.clientId),ev.type,who&&('Crew: '+who),ev.notes].filter(Boolean).join('\n');
-  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Quiet Media//Hours//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT','UID:qmh-'+ev.id+'@hours.quietmedia.co.uk','DTSTAMP:'+f(Date.now()),'DTSTART:'+f(ev.start),'DTEND:'+f(ev.end),'SUMMARY:'+e(ev.title),ev.location?'LOCATION:'+e(ev.location):'','DESCRIPTION:'+e(desc),'END:VEVENT','END:VCALENDAR'].filter(Boolean).join('\r\n');
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Quiet Media//Hours//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT','UID:qms-'+ev.id+'@studio.quietmedia.co.uk','DTSTAMP:'+f(Date.now()),'DTSTART:'+f(ev.start),'DTEND:'+f(ev.end),'SUMMARY:'+e(ev.title),ev.location?'LOCATION:'+e(ev.location):'','DESCRIPTION:'+e(desc),'END:VEVENT','END:VCALENDAR'].filter(Boolean).join('\r\n');
 }
 function addToAppleCalendar(ev){
   const blob=new Blob([icsFor(ev)],{type:'text/calendar;charset=utf-8'});const url=URL.createObjectURL(blob);
@@ -1047,27 +1010,29 @@ function vInsights(){
 }
 
 function vLock(){
-  const c=cfg||loadCfg()||{owner:'samueljjh',repo:'quietmedia-hours-data',token:'',pass:''};
-  const first=!c.token;
-  return '<div class="lock"><div class="brand" style="margin:0 0 28px"><svg viewBox="0 0 400 400" aria-hidden="true"><path d="M 296.555 343.549 A 173 173 0 1 1 343.549 296.555 L 302.822 255.828 A 117 117 0 1 0 255.828 302.822 L 296.555 343.549 Z" fill="currentColor"/></svg><b>quiet media</b><span>Hours</span></div>'+
-  '<h1 style="margin-bottom:8px">'+(first?'Set up this device':'Unlock')+'</h1><p class="muted" style="margin:0 0 24px;max-width:46ch">'+(first?'Everything is encrypted on this device before it is saved. You need the GitHub token for the data store and the shared passphrase.':'Enter the shared passphrase to decrypt your data on this device.')+'</p>'+
-  '<form id="lockForm" class="grid" style="max-width:420px">'+
-  (first?'<label class="f">GitHub token<input type="password" id="l-token" autocomplete="off" value="'+esc(c.token)+'"></label><details class="note"><summary style="cursor:pointer">How to make the token</summary><ol style="padding-left:18px;margin:8px 0;line-height:1.7"><li>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.</li><li>Repository access: Only select repositories → <b>'+esc(c.repo)+'</b> and <b>quietmedia-hours</b> (the second one lets the app publish the client availability page).</li><li>Permissions → Repository → Contents → <b>Read and write</b>.</li><li>Expiry: 1 year. Generate, copy it here.</li></ol></details>':'')+
-  '<label class="f">Passphrase<input type="password" id="l-pass" autocomplete="current-password"></label>'+
-  (first?'<label class="chip" style="font-size:13px"><input type="checkbox" id="l-remember" checked> Stay unlocked on this device</label><details class="note"><summary style="cursor:pointer">Advanced</summary><div class="row" style="margin-top:8px"><label class="f">Owner<input type="text" id="l-owner" value="'+esc(c.owner)+'"></label><label class="f">Data repo<input type="text" id="l-repo" value="'+esc(c.repo)+'"></label></div></details>':'<label class="chip" style="font-size:13px"><input type="checkbox" id="l-remember" checked> Stay unlocked on this device</label>')+
-  (S.unlockErr?'<div class="banner warn" style="margin:0">'+esc(S.unlockErr)+'</div>':'')+
-  '<div><button class="btn" type="submit" id="l-go">'+(first?'Set up':'Unlock')+'</button>'+(first?'':' <button class="link" type="button" data-act="signout" style="margin-left:14px">Use a different account</button>')+'</div></form>'+
-  '<p class="note" style="margin-top:28px;max-width:46ch">The first device to set up chooses the passphrase. Every other device must use the same one. There is no reset: if it is lost, the data cannot be read.</p></div>';
+  const mode=S.recovery?'reset':(S.authMode||'in');
+  const brand='<div class="brand" style="margin:0 0 28px"><svg viewBox="0 0 400 400" aria-hidden="true"><path d="M 296.555 343.549 A 173 173 0 1 1 343.549 296.555 L 302.822 255.828 A 117 117 0 1 0 255.828 302.822 L 296.555 343.549 Z" fill="currentColor"/></svg><b>quiet media</b><span>Studio</span></div>';
+  const title=mode==='reset'?'Choose a new password':mode==='up'?'Create your account':mode==='forgot'?'Reset your password':'Sign in';
+  const lead=mode==='reset'?'This device is signed in through the reset link. Pick a new password.':mode==='up'?'Only invited email addresses can create an account.':mode==='forgot'?'We will email you a link that signs you in so you can set a new password.':'Your studio, bookings and call sheets.';
+  return '<div class="lock">'+brand+'<h1 style="margin-bottom:8px">'+title+'</h1><p class="muted" style="margin:0 0 24px;max-width:46ch">'+lead+'</p>'+
+  '<form id="lockForm" class="grid" style="max-width:420px" data-mode="'+mode+'">'+
+  (mode==='reset'?'':'<label class="f">Email<input type="email" id="l-email" autocomplete="username" inputmode="email" autocapitalize="off" value="'+esc(S.authEmail||'')+'"></label>')+
+  (mode==='forgot'?'':'<label class="f">'+(mode==='reset'?'New password':'Password')+'<input type="password" id="l-pass" autocomplete="'+(mode==='in'?'current-password':'new-password')+'"></label>')+
+  (S.unlockErr?'<div class="banner warn" style="margin:0">'+esc(S.unlockErr)+'</div>':'')+(S.authMsg?'<div class="banner" style="margin:0">'+esc(S.authMsg)+'</div>':'')+
+  '<div class="row" style="align-items:center"><button class="btn" type="submit" id="l-go" style="flex:0 0 auto">'+(mode==='reset'?'Save password':mode==='up'?'Create account':mode==='forgot'?'Send reset link':'Sign in')+'</button>'+
+  (mode==='in'?'<button class="link" type="button" data-act="authmode" data-v="up">First time? Create your account</button><button class="link" type="button" data-act="authmode" data-v="forgot">Forgotten password</button>':mode==='reset'?'':'<button class="link" type="button" data-act="authmode" data-v="in">Back to sign in</button>')+'</div></form>'+
+  '<p class="note" style="margin-top:28px;max-width:46ch">Data is stored in Quiet Media\'s own database in London, encrypted in transit and at rest, and only accounts invited to the studio can read it. A copy stays on this device so the app opens offline.</p></div>';
 }
 function vSettings(){
-  const s=S.settings;const c=cfg||{};
+  const s=S.settings;
   return '<div class="panel-head"><h1>Settings</h1></div><div class="grid g2">'+
-  '<section class="panel grid"><h3>This device</h3><dl class="kv"><dt>Data store</dt><dd>'+esc((c.owner||'')+'/'+(c.repo||''))+'</dd><dt>Sync</dt><dd>'+(S.sync.state==='ok'?'Up to date, '+fmtTime(S.sync.last):S.sync.state==='offline'?'Offline, saved locally':S.sync.state==='syncing'?'Syncing':esc(S.sync.err||'Not synced yet'))+'</dd><dt>Encryption</dt><dd>AES-256, key never leaves this device</dd></dl>'+
+  '<section class="panel grid"><h3>Account</h3><dl class="kv"><dt>Signed in as</dt><dd>'+esc(S.user?S.user.email:'')+'</dd><dt>Sync</dt><dd>'+(S.sync.state==='ok'?'Up to date, '+fmtTime(S.sync.last):S.sync.state==='offline'?'Offline, saved locally':S.sync.state==='syncing'?'Syncing':esc(S.sync.err||'Not synced yet'))+'</dd><dt>Where</dt><dd>Quiet Media database, London</dd></dl>'+
+  '<div class="row" style="align-items:end"><label class="f">Invite a teammate by email<input type="email" id="s-invite" placeholder="name@quietmedia.co.uk"></label><button class="btn ghost small" data-act="invite" style="flex:0 0 auto">Invite</button></div><p class="note">They create an account with that email and see everything you see.</p>'+
   '<label class="chip"><input type="checkbox" data-set="haptics" '+(s.haptics===false?'':'checked')+'> Haptic taps on the phone</label>'+
-  '<div class="row"><button class="btn ghost small" data-act="syncnow">Sync now</button><button class="btn ghost small" data-act="lock">Lock this device</button><button class="btn ghost small" data-act="newtoken">Change token</button><button class="btn danger small" data-act="signout">Remove data from this device</button></div></section>'+
+  '<div class="row"><button class="btn ghost small" data-act="syncnow">Sync now</button><button class="btn ghost small" data-act="changepass">Change password</button><button class="btn danger small" data-act="signout">Sign out of this device</button></div></section>'+
   '<section class="panel grid"><h3>People</h3><div class="row">'+PEOPLE.map(p=>'<label class="f">Name<input type="text" id="s-name-'+p.id+'" data-set="names.'+p.id+'" value="'+esc(name(p.id))+'"></label>').join('')+'</div>'+
   '<p class="note">Each device remembers who is using it. Choose your name at the top of the page on your own computer and phone.</p></section>'+
-  '<section class="panel grid"><h3>Public availability page</h3><p class="note">Clients can see which days are free at <b>hours.quietmedia.co.uk/availability/</b>. Only dates and a free, limited or busy flag are published. Nothing else leaves the encrypted store.</p>'+
+  '<section class="panel grid"><h3>Public availability page</h3><p class="note">Clients can see which days are free at <b>sheets.quietmedia.co.uk/availability/</b>. Only dates and a free, limited or busy flag are published.</p>'+
   '<div class="row"><label class="f">Publish<select id="s-ap" data-set="availPublish"><option value="1" '+(s.availPublish!==false?'selected':'')+'>On</option><option value="0" '+(s.availPublish===false?'selected':'')+'>Off</option></select></label><label class="f">Weeks ahead<input type="number" id="s-aw" min="2" max="52" data-set="availWeeks" value="'+(s.availWeeks||12)+'"></label><label class="f">Weekends<select id="s-awe" data-set="availWeekends"><option value="0" '+(!s.availWeekends?'selected':'')+'>Not available</option><option value="1" '+(s.availWeekends?'selected':'')+'>Available</option></select></label></div>'+
   '<div class="row"><label class="f">Enquiry email shown<input type="email" id="s-ae" data-set="availEmail" value="'+esc(s.availEmail||'')+'"></label><label class="f">A day counts as busy from (hrs)<input type="number" id="s-am" min="1" max="12" data-set="availMinHours" value="'+(s.availMinHours||3)+'"></label></div>'+
   '<p class="note">'+(S.avail==='ok'?'Last published '+fmtTime(S.availAt)+'.':S.avail==='noaccess'?'Not published: the GitHub token also needs Contents read and write on quietmedia-hours.':S.avail==='error'?'Not published yet; will retry after the next change.':'Publishes a few seconds after any booking changes.')+' <button class="link" data-act="pubavail">Publish now</button></p></section>'+
@@ -1452,21 +1417,19 @@ async function saveEventForm(evid){
 /* ===== sending: call sheets for crew, pencils for clients ===== */
 const b64url=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 async function sheetKeyFor(ev){if(ev.sheetKey)return ev.sheetKey;const k=b64url(crypto.getRandomValues(new Uint8Array(16)));await patch('events',ev.id,{sheetKey:k});return k}
-async function encryptWith(keyB64url,obj){const raw=Uint8Array.from(atob(keyB64url.replace(/-/g,'+').replace(/_/g,'/')+'=='.slice(0,(4-keyB64url.length%4)%4)),c=>c.charCodeAt(0));const key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']);const iv=crypto.getRandomValues(new Uint8Array(12));const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(JSON.stringify(obj)));return {v:1,iv:b64(iv),ct:b64(ct)}}
 function sheetPayload(ev,kind){
   const grp=groupOf(ev).filter(e=>e.status!=='cancelled');const c=client(ev.clientId)||{};const s=S.settings;
   const days=grp.map(e=>({date:e.start,start:fmtTime(e.start),end:fmtTime(e.end),call:e.callTime||'',location:e.location||'',title:e.title,type:e.type}));
   const base={kind,title:ev.title,client:c.name||'',type:ev.type,days,location:ev.location||'',notes:ev.notes||'',from:s.senderName||'Quiet Media',replyEmail:s.replyEmail||s.availEmail||'',replyPhone:s.replyPhone||'',updated:Date.now()};
-  if(kind==='crew'){base.crew=(ev.crew||[]).filter(x=>x.status!=='declined').map(x=>({name:crewName(x.id),role:(S.crew[x.id]||{}).role||''}));base.team=(ev.people||[]).map(name);return base}
+  if(kind==='crew'){base.crew=(ev.crew||[]).filter(x=>x.status!=='declined').map(x=>({name:crewName(x.id),role:''}));base.team=(ev.people||[]).map(name);return base}
   base.fee=grp.reduce((t,e)=>t+eventValue(e),0);base.vat=c.vat!==false;base.status=evStatus(ev);base.terms=s.bookingTerms||'';base.ref=ev.groupId||ev.id;return base;
 }
+/* publish a page: one row in `sheets`; the link carries the token and works the moment it is copied */
 async function publishSheet(ev,kind,payload){
-  const key=await sheetKeyFor(ev);const id=(ev.groupId||ev.id)+(kind==='crew'?'c':'k');
-  const blob=await encryptWith(key,payload||sheetPayload(ev,kind));
-  const siteRepo=cfg.siteRepo||'quietmedia-hours';
-  let sha=null;try{const r=await ghGet('p/'+id+'.json',null,siteRepo);if(!r.missing)sha=r.sha}catch(e){}
-  const r=await ghPut('p/'+id+'.json',blob,sha,'Publish '+kind+' page',siteRepo);if(r.conflict)throw new Error('conflict');
-  const url='https://hours.quietmedia.co.uk/p/#'+id+'.'+key;
+  const key=await sheetKeyFor(ev);const id=(ev.groupId||ev.id)+(kind==='crew'?'c':'k');const body=payload||sheetPayload(ev,kind);
+  const {error}=await sb.from('sheets').upsert({id,org_id:ORG,kind,token:key,payload:body,version:body.version||1,published_at:new Date().toISOString(),revoked:false});
+  if(error)throw Object.assign(new Error(error.message),{code:'db'});
+  const url=SHEETS_HOST+'/#'+id+'.'+key;
   await patch('events',ev.id,kind==='crew'?{sheetAt:Date.now()}:{pencilSent:ev.pencilSent||Date.now(),clientPageAt:Date.now()});
   return url;
 }
@@ -1518,7 +1481,7 @@ function crewSheetPayload(ev,sh,version){
     contacts:(sh.contacts||[]).filter(c=>c.name),hospital:sh.hospital,hotel:sh.hotel,equipment:sh.equipment,notes:sh.notes,weather:sh.weather!==false,showMap:sh.showMap!==false,accent:ev.clientId?colour(ev.clientId):'',
     from:s.senderName||'Quiet Media',replyEmail:s.replyEmail||s.availEmail||'',replyPhone:s.replyPhone||'',version:version||sh.version||1,updated:Date.now()};
 }
-function sheetUrlFor(ev,sh){const a=sheetAnchor(ev);const k=ev.sheetKey||a.sheetKey;if(!k||!sh.publishedAt)return '';return 'https://hours.quietmedia.co.uk/p/#'+(ev.groupId||ev.id)+'c.'+k}
+function sheetUrlFor(ev,sh){const a=sheetAnchor(ev);const k=ev.sheetKey||a.sheetKey;if(!k||!sh.publishedAt)return '';return SHEETS_HOST+'/#'+(ev.groupId||ev.id)+'c.'+k}
 function readSheetForm(){const sh=S.modal.sheet;document.querySelectorAll('#csb-form [data-s]').forEach(el=>{const p=el.dataset.s.split('.');let o=sh;for(let i=0;i<p.length-1;i++){if(o[p[i]]==null)o[p[i]]={};o=o[p[i]]}const k=p[p.length-1];o[k]=el.type==='checkbox'?el.checked:el.value});S.modal.dirty=true}
 function csPreview(){const m=S.modal;if(!m||m.type!=='callsheet')return;const el=document.getElementById('csb-page');if(!el)return;const ev=S.events[m.evid];el.innerHTML=QMSheet.render({...crewSheetPayload(ev,m.sheet),preview:true});(m.wx||[]).forEach((h,i)=>{const w=el.querySelector('#cs-wx-'+i);if(w&&h)w.innerHTML=h});const st=document.getElementById('csb-status');if(st)st.textContent=m.dirty?'Unsaved changes':(m.sheet.publishedAt?'Published v'+m.sheet.version+' · '+fmtDate(m.sheet.publishedAt,{day:'numeric',month:'short'})+' '+fmtTime(m.sheet.publishedAt):'Draft')}
 async function csWeather(){const m=S.modal;if(!m||m.type!=='callsheet')return;const el=document.getElementById('csb-page');if(!el)return;const data=crewSheetPayload(S.events[m.evid],m.sheet);await QMSheet.weather(el,data);m.wx=data.days.map((d,i)=>{const w=el.querySelector('#cs-wx-'+i);return w?w.innerHTML:''})}
@@ -1566,8 +1529,8 @@ function openCallSheet(evid){
 async function saveSheet(){const m=S.modal;if(!m||m.type!=='callsheet')return;readSheetForm();const ev=S.events[m.evid];const a=sheetAnchor(ev);const sh=JSON.parse(JSON.stringify(m.sheet));await patch('events',a.id,{sheet:sh});m.dirty=false;csPreview()}
 async function publishCallSheet(b){const m=S.modal;const ev=S.events[m.evid];readSheetForm();const sh=m.sheet;const v=(sh.version||0)+1;
   b.disabled=true;b.textContent='Publishing…';
-  try{const url=await publishSheet(ev,'crew',crewSheetPayload(ev,sh,v));sh.version=v;sh.publishedAt=Date.now();await patch('events',sheetAnchor(ev).id,{sheet:JSON.parse(JSON.stringify(sh))});m.dirty=false;S.sheetUrls=S.sheetUrls||{};S.sheetUrls[m.evid+'c']=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied; live in about a minute.')}
-  catch(e){toast(e.code==='auth'?'The GitHub token needs access to quietmedia-hours to publish pages.':'Could not publish. Try again.')}
+  try{const url=await publishSheet(ev,'crew',crewSheetPayload(ev,sh,v));sh.version=v;sh.publishedAt=Date.now();await patch('events',sheetAnchor(ev).id,{sheet:JSON.parse(JSON.stringify(sh))});m.dirty=false;S.sheetUrls=S.sheetUrls||{};S.sheetUrls[m.evid+'c']=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied.')}
+  catch(e){toast('Could not publish: '+(e.message||'try again'))}
   renderModal()}
 
 function pencilsPanel(){
@@ -1660,13 +1623,14 @@ document.addEventListener('click',async ev=>{
     case 'cswx':readSheetForm();S.modal.wx=[];csPreview();csWeather();break;
     case 'cssave':await saveSheet();toast('Draft saved');break;
     case 'cspublish':await publishCallSheet(b);csPreview();break;
-    case 'pubsheet':{const ev=S.events[v];b.disabled=true;b.textContent='Publishing…';try{const url=await publishSheet(ev,b.dataset.k);S.sheetUrls=S.sheetUrls||{};S.sheetUrls[v+(b.dataset.k==='crew'?'c':'k')]=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied; live in about a minute.')}catch(e){toast(e.code==='auth'?'The GitHub token needs access to quietmedia-hours to publish pages.':'Could not publish. Try again.')}renderModal();break}
+    case 'pubsheet':{const ev=S.events[v];b.disabled=true;b.textContent='Publishing…';try{const url=await publishSheet(ev,b.dataset.k);S.sheetUrls=S.sheetUrls||{};S.sheetUrls[v+(b.dataset.k==='crew'?'c':'k')]=url;try{await navigator.clipboard.writeText(url)}catch(e){}toast('Published. Link copied.')}catch(e){toast('Could not publish: '+(e.message||'try again'))}renderModal();break}
     case 'copy':try{await navigator.clipboard.writeText(v);toast('Copied')}catch(e){toast('Select the link and copy it')}break;
     case 'evstatus':{const ev=S.events[b.dataset.e];for(const e of groupOf(ev)){await patch('events',e.id,{status:v})}renderModal();break}
     case 'syncnow':syncAll();toast('Syncing');break;
-    case 'lock':lockDevice();break;
-    case 'newtoken':saveCfg({...(cfg||{}),token:''});KEY=null;S.locked=true;render();break;
-    case 'signout':if(!confirmed('signout')){toast('Press again to confirm removing all data from this device');break}signOut();break;
+    case 'signout':if(!confirmed('signout')){toast('Press again to sign out and clear this device');break}signOut();break;
+    case 'authmode':S.authMode=v;S.unlockErr='';S.authMsg='';render();break;
+    case 'invite':{const el=document.getElementById('s-invite');const em=(el.value||'').trim();if(!/@/.test(em)){toast('Enter an email address');break}try{await invite(em);el.value='';toast('Invited '+em+'. They can now create an account.')}catch(e){toast(e.message)}break}
+    case 'changepass':{const em=S.user&&S.user.email;if(!em)break;try{await resetPassword(em);toast('Reset link sent to '+em)}catch(e){toast(e.message)}break}
     case 'importpick':document.getElementById('importFile').click();break;
     case 'calnav':{if(v==='0'){S.cal.cursor=Date.now();S.cal.sel=startOfDay(Date.now());S.calAnim='zo';render()}else calMove(Number(v));break}
     case 'calzoom':calZoom(Number(v));break;
@@ -1704,13 +1668,15 @@ document.addEventListener('change',ev=>{
     if(k.startsWith('names.')){const p=k.split('.')[1];saveSettings({names:{...S.settings.names,[p]:val||PEOPLE.find(x=>x.id===p).def}})}else saveSettings({[k]:val})}
 });
 function confirmed(k){const n=Date.now();if(confirmed.k===k&&n-confirmed.t<4000){confirmed.k=null;return true}confirmed.k=k;confirmed.t=n;return false}
-document.addEventListener('submit',async ev=>{if(ev.target.id!=='lockForm')return;ev.preventDefault();const g=id=>{const el=document.getElementById(id);return el?el.value.trim():undefined};
-  const prev=cfg||loadCfg()||{owner:'samueljjh',repo:'quietmedia-hours-data'};
-  const c={owner:g('l-owner')||prev.owner,repo:g('l-repo')||prev.repo,token:g('l-token')||prev.token,pass:g('l-pass')};
-  if(!c.token||!c.pass){S.unlockErr='Both fields are needed.';render();return}
-  const remember=!!document.getElementById('l-remember')?.checked;
-  const btn=document.getElementById('l-go');btn.disabled=true;btn.textContent='Unlocking…';S.unlockErr='';
-  try{await unlock(c);if(!remember)saveCfg({...c,pass:''});toast('Unlocked')}catch(e){S.unlockErr=e.message||'Could not unlock';S.locked=true;render()}
+document.addEventListener('submit',async ev=>{if(ev.target.id!=='lockForm')return;ev.preventDefault();const f=ev.target;const mode=f.dataset.mode;const g=id=>{const el=document.getElementById(id);return el?el.value.trim():''};
+  const email=g('l-email'),pass=g('l-pass');S.authEmail=email||S.authEmail;
+  const btn=document.getElementById('l-go');btn.disabled=true;btn.textContent='One moment…';S.unlockErr='';S.authMsg='';
+  try{
+    if(mode==='reset'){if(pass.length<8)throw new Error('Use at least 8 characters.');await setPassword(pass);const {data:{session}}=await sb.auth.getSession();if(session)await startSession(session)}
+    else if(mode==='forgot'){if(!email)throw new Error('Enter your email.');S.authMsg=await resetPassword(email);S.authMode='in';render()}
+    else if(mode==='up'){if(!email||pass.length<8)throw new Error('Enter your email and a password of at least 8 characters.');const msg=await signUp(email,pass);if(msg){S.authMsg=msg;S.authMode='in';render()}else{const {data:{session}}=await sb.auth.getSession();if(session)await startSession(session)}}
+    else{if(!email||!pass)throw new Error('Enter your email and password.');await signIn(email,pass);const {data:{session}}=await sb.auth.getSession();if(session)await startSession(session);toast('Signed in')}
+  }catch(e){S.unlockErr=e.message||'Could not sign in';S.locked=true;render()}
 });
 document.addEventListener('change',ev=>{if(ev.target.id==='importFile'&&ev.target.files[0])importBackup(ev.target.files[0])});
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='d-task'){ev.preventDefault();startTimer()}});
