@@ -658,7 +658,7 @@ async function boot(){
   window.addEventListener('online',syncAll);
   if('serviceWorker' in navigator){
     const had=!!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register('sw.js').then(reg=>{reg.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
     // A new version has taken over: reload once so you are looking at it, unless you are mid-edit.
     navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had)return;if(S.modal){toast('Update ready. It will load next time.');return}toast('Updating…');setTimeout(()=>location.reload(),400)});
   }
