@@ -653,7 +653,12 @@ async function boot(){
   if(session&&!S.recovery)await startSession(session);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncAll()});
   window.addEventListener('online',syncAll);
-  if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});let had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)toast('App updated')})}
+  if('serviceWorker' in navigator){
+    const had=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(reg=>{reg.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
+    // A new version has taken over: reload once so you are looking at it, unless you are mid-edit.
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had)return;if(S.modal){toast('Update ready. It will load next time.');return}toast('Updating…');setTimeout(()=>location.reload(),400)});
+  }
 }
 
 /* native downloads */
