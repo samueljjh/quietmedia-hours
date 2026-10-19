@@ -152,7 +152,9 @@ nav.tabs svg{display:none}
 .btn.danger{background:transparent;color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger)}
 .btn[disabled]{opacity:.35;cursor:not-allowed}
 .link{background:none;border:0;padding:0;color:var(--sand);font-size:13px;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(var(--line-rgb),.3)}
-label.f{display:grid;gap:6px;font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--tan);min-width:0}
+label.f{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--tan);min-width:0}
+label.f>input,label.f>select,label.f>textarea{min-width:0;max-width:100%}
+input,select,textarea{min-width:0;max-width:100%}
 input[type=text],input[type=number],input[type=date],input[type=time],input[type=email],input[type=tel],input[type=url],select,textarea{width:100%;background:var(--raise);border:1px solid transparent;padding:10px 13px;border-radius:12px;font-weight:300;text-transform:none;letter-spacing:0;-webkit-appearance:none;appearance:none}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A7F76' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--line-strong);background:var(--bg)}
@@ -403,10 +405,14 @@ tfoot td{border-bottom:0;font-weight:400}
 .csb-prev{overflow:auto;background:var(--raise);padding:18px}
 @media (max-width:899px){.csb-prev{display:none}.csb.showprev .csb-prev{display:block}.csb.showprev .csb-form{display:none}}
 .csb-page{background:var(--bg);border-radius:var(--r);padding:22px 20px;max-width:720px;margin:0 auto;box-shadow:var(--shadow)}
-.csb-sec{display:grid;gap:10px;padding:14px;border-radius:var(--r);background:var(--surface)}
+.csb-sec{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:14px;border-radius:var(--r);background:var(--surface);min-width:0}
+.csb-form{grid-template-columns:minmax(0,1fr)}
+.csb-form .row>*{min-width:0}
+.csb,.csb-body,.csb-form,.csb-head{min-width:0;max-width:100%}
+.modal>*{min-width:0;max-width:100%}
 .csb-sec h3{font-size:15px;font-weight:500}
 .csb-rows{display:grid;gap:6px}
-.csb-row{display:grid;grid-template-columns:110px 1fr 36px;gap:6px;align-items:center}
+.csb-row{display:grid;grid-template-columns:110px minmax(0,1fr) 36px;gap:6px;align-items:center}
 .csb-row .iconbtn,.csb-crew .iconbtn{width:34px;height:34px;font-size:18px;font-weight:300}
 .csb-crew{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr) 100px 36px;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .csb-crew:first-child{border-top:0}

@@ -92,7 +92,10 @@
 .cs .cs-foot{font-size:12px;color:var(--cs-muted);margin-top:22px;padding-bottom:70px}
 .cs .cs-bar{color:#fff;position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:5;display:flex;gap:8px;padding:8px;border-radius:999px;background:var(--cs-bar,rgba(20,20,20,.92));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 14px 40px rgba(0,0,0,.35);transform:translateY(120%);transition:transform .6s var(--cs-ease)}
 .cs .cs-bar.in{transform:none}
-.cs .cs-bar .cs-btn{flex:1;min-height:44px}
+.cs .cs-bar .cs-btn{flex:1;min-height:44px;background:#fff}
+.cs .cs-bar .cs-btn span{color:#0A0A0A}
+.cs .cs-bar .cs-btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.cs .cs-bar .cs-btn.ghost span{color:#fff}
 .cs.static .cs-bar{display:none}
 .cs .cs-warn{font-size:13px;color:#C9894E}
 @media (min-width:720px){.cs .cs-bar{left:auto;right:24px;width:360px}}
@@ -195,6 +198,15 @@
       return 'BEGIN:VEVENT\r\nUID:qm-'+(data.ref||'sheet')+'-'+i+'@quietmedia.co.uk\r\nDTSTAMP:'+st(Date.now())+'\r\nDTSTART:'+st(s)+'\r\nDTEND:'+st(e)+'\r\nSUMMARY:'+String(data.title).replace(/[,;]/g,' ')+(data.days.length>1?' (day '+(i+1)+')':'')+'\r\nLOCATION:'+String(loc.address||loc.name||'').replace(/[,;]/g,' ')+'\r\nDESCRIPTION:Call sheet: '+location.href.replace(/[,;]/g,'')+'\r\nEND:VEVENT'});
     return 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Quiet Media//Call sheet//EN\r\n'+evs.join('\r\n')+'\r\nEND:VCALENDAR\r\n';
   }
+  /* UK postcode first (exact), then town names from the address, longest to shortest. */
+  async function geocode(q){
+    const pc=(q.match(/\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i)||[]);
+    if(pc[0]){try{const r=await (await fetch('https://api.postcodes.io/postcodes/'+encodeURIComponent((pc[1]+pc[2]).toUpperCase()))).json();if(r&&r.result)return {latitude:r.result.latitude,longitude:r.result.longitude,name:r.result.admin_district||r.result.parish||pc[0].toUpperCase()}}catch(e){}}
+    const parts=q.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/ig,'').split(',').map(x=>x.trim()).filter(Boolean);
+    const tries=[];for(let i=parts.length-1;i>=0;i--){tries.push(parts[i])}
+    for(const t of tries){if(!t||/\d/.test(t))continue;try{const g=await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name='+encodeURIComponent(t))).json();if(g.results&&g.results[0])return g.results[0]}catch(e){}}
+    return null;
+  }
   async function weather(rootEl,data){
     if(data.weather===false)return;
     for(let i=0;i<(data.days||[]).length;i++){const d=data.days[i];const el=rootEl.querySelector('#cs-wx-'+i);if(!el)continue;
@@ -204,8 +216,7 @@
       const note=d.weatherNote?'<div class="cs-wxnote" style="grid-column:1/-1">'+esc(d.weatherNote)+'</div>':'';
       if(!q||ahead<-1||ahead>15){el.innerHTML='<div class="cs-wxt big"><div><b>—</b><em>'+(q?'Forecast available from 16 days before the shoot.':'Add a location to get a forecast.')+'</em></div></div>'+note;continue}
       try{
-        const g=await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name='+encodeURIComponent(q.split(',').slice(-2).join(',').trim()||q))).json();
-        const hit=g.results&&g.results[0];if(!hit)throw 0;
+        const hit=await geocode(q);if(!hit)throw 0;
         const f=await (await fetch('https://api.open-meteo.com/v1/forecast?latitude='+hit.latitude+'&longitude='+hit.longitude+'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset&timezone=auto&start_date='+ymd+'&end_date='+ymd)).json();
         const dd=f.daily;if(!dd||!dd.time||!dd.time.length)throw 0;const t=s=>s.slice(11,16);const w=WX[dd.weather_code[0]]||['',''];
         el.innerHTML='<div class="cs-wxt big">'+(WXI[w[1]]||'')+'<div><b>'+Math.round(dd.temperature_2m_max[0])+'° <span style="font-size:16px;font-weight:300;color:var(--cs-muted)">/ '+Math.round(dd.temperature_2m_min[0])+'°</span></b><em>'+esc(w[0])+' · '+esc(hit.name)+'</em></div></div>'+
